@@ -1,29 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart'; // Tambahkan ini
+import 'view_models/note_view_model.dart';
+import 'models/note_model.dart';
+import 'dart:io';
 
 void main() {
-  runApp(const PawNotesApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => NoteViewModel(),
+      child: const PawNotesApp(),
+    ),
+  );
 }
 
-class PawNotesApp extends StatefulWidget {
+class PawNotesApp extends StatelessWidget {
   const PawNotesApp({super.key});
 
   @override
-  State<PawNotesApp> createState() => _PawNotesAppState();
-}
-
-class _PawNotesAppState extends State<PawNotesApp> {
-  MaterialColor themeColor = Colors.pink;
-
-  @override
   Widget build(BuildContext context) {
+    final themeColor = context.watch<NoteViewModel>().themeColor;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: NotesPage(
-        themeColor: themeColor,
-        changeTheme: (newColor) {
-          setState(() => themeColor = newColor);
-        },
+      title: 'PawNotes',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: themeColor,
+        fontFamily: 'Inter',
       ),
+      home: const NotesPage(),
     );
   }
 }
@@ -31,27 +38,28 @@ class _PawNotesAppState extends State<PawNotesApp> {
 // ======================== NOTES PAGE =============================
 
 class NotesPage extends StatefulWidget {
-  final MaterialColor themeColor;
-  final Function(MaterialColor) changeTheme;
-
-  const NotesPage({
-    super.key,
-    required this.themeColor,
-    required this.changeTheme,
-  });
+  const NotesPage({super.key});
 
   @override
   State<NotesPage> createState() => _NotesPageState();
 }
 
 class _NotesPageState extends State<NotesPage> {
-  List<Map<String, dynamic>> notes = [];
   int currentPage = 0;
-
   bool showThemeOptions = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final viewModel = context.watch<NoteViewModel>();
+    final themeColor = viewModel.themeColor;
+
     return GestureDetector(
       onTap: () {
         if (showThemeOptions) {
@@ -60,183 +68,331 @@ class _NotesPageState extends State<NotesPage> {
             currentPage = 0;
           });
         }
+        FocusScope.of(context).unfocus();
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.grey[50],
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: widget.themeColor[100],
-          title: const Row(
+          backgroundColor: themeColor[100],
+          centerTitle: false,
+          title: Row(
             children: [
-              Icon(Icons.pets, color: Colors.black),
-              SizedBox(width: 5),
-              Text(
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: themeColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.pets, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
                 "PAWNOTES",
                 style: TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.bold),
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                  fontSize: 20,
+                ),
               ),
             ],
           ),
-        ),
-
-        body: Stack(
-          children: [
-            currentPage == 0 ? buildHome() : Container(),
-
-            if (showThemeOptions)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 70),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 8,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Wrap(
-                    spacing: 12,
-                    children: [
-                      themeCircle(Colors.pink),
-                      themeCircle(Colors.blue),
-                      themeCircle(Colors.green),
-                      themeCircle(Colors.orange),
-                      themeCircle(Colors.purple),
-                    ],
-                  ),
-                ),
-              ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.search, color: themeColor[800]),
+              onPressed: () {
+                // Focus search or show/hide search bar
+              },
+            ),
           ],
         ),
-
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                if (currentPage == 0) _buildSearchBar(viewModel, themeColor),
+                Expanded(
+                  child: currentPage == 0 ? buildHome(viewModel, themeColor) : Container(),
+                ),
+              ],
+            ),
+            if (showThemeOptions) _buildThemePicker(viewModel),
+          ],
+        ),
         floatingActionButton: currentPage == 0
-            ? FloatingActionButton(
-                backgroundColor: widget.themeColor,
+            ? FloatingActionButton.extended(
+                backgroundColor: themeColor,
                 onPressed: () async {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => AddNotePage(color: widget.themeColor),
+                      builder: (_) => AddNotePage(color: themeColor),
                     ),
                   );
 
-                  if (result != null) {
-                    setState(() {
-                      notes.add(result);
-                    });
+                  if (result != null && context.mounted) {
+                    viewModel.addNote(result["title"], result["content"]);
                   }
                 },
-                child: const Icon(Icons.add),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text("Catatan Baru", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               )
             : null,
+        bottomNavigationBar: _buildBottomNav(themeColor),
+      ),
+    );
+  }
 
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: widget.themeColor[100],
+  Widget _buildSearchBar(NoteViewModel viewModel, MaterialColor themeColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: themeColor[100],
+      child: TextField(
+        controller: _searchController,
+        onChanged: (v) => viewModel.setSearchQuery(v),
+        decoration: InputDecoration(
+          hintText: "Cari catatan...",
+          prefixIcon: const Icon(Icons.search),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
           ),
-          child: BottomNavigationBar(
-            backgroundColor: widget.themeColor[100],
-            elevation: 0,
-            currentIndex: currentPage,
-            selectedItemColor: widget.themeColor[700],
-            unselectedItemColor: Colors.black54,
-            onTap: (index) {
-              setState(() {
-                currentPage = index;
-                showThemeOptions = index == 1;
-              });
-            },
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded),
-                label: "Home",
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.color_lens_rounded),
-                label: "Tema",
-              ),
-            ],
-          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
         ),
       ),
     );
   }
 
-  Widget themeCircle(MaterialColor color) {
+  Widget _buildThemePicker(NoteViewModel viewModel) {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 80, left: 20, right: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Pilih Tema Favorit", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _themeCircle(viewModel, Colors.pink),
+                _themeCircle(viewModel, Colors.blue),
+                _themeCircle(viewModel, Colors.green),
+                _themeCircle(viewModel, Colors.orange),
+                _themeCircle(viewModel, Colors.purple),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _themeCircle(NoteViewModel viewModel, MaterialColor color) {
+    final isSelected = viewModel.themeColor == color;
     return GestureDetector(
       onTap: () {
-        widget.changeTheme(color);
+        viewModel.updateTheme(color);
         setState(() {
           showThemeOptions = false;
           currentPage = 0;
         });
       },
-      child: CircleAvatar(radius: 18, backgroundColor: color),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? color : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: CircleAvatar(radius: 18, backgroundColor: color),
+      ),
     );
   }
 
-  Widget buildHome() {
-    return notes.isEmpty
-        ? const Center(child: Text("Belum ada catatan"))
-        : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: notes.length,
-            itemBuilder: (_, i) {
-              return GestureDetector(
+  Widget _buildBottomNav(MaterialColor themeColor) {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10),
+        ],
+      ),
+      child: BottomNavigationBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        currentIndex: currentPage,
+        selectedItemColor: themeColor,
+        unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        onTap: (index) {
+          setState(() {
+            currentPage = index;
+            showThemeOptions = index == 1;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Beranda"),
+          BottomNavigationBarItem(icon: Icon(Icons.palette_rounded), label: "Tema"),
+        ],
+      ),
+    );
+  }
+
+  Widget buildHome(NoteViewModel viewModel, MaterialColor themeColor) {
+    final notes = viewModel.filteredNotes;
+
+    if (viewModel.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (notes.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Perbaikan di sini: Cek apakah kIsWeb atau bukan
+            if (kIsWeb)
+              Icon(Icons.pets, size: 100, color: themeColor[200])
+            else
+              Image.file(
+                File("C:/Users/Lenovo/.gemini/antigravity/brain/b9b34c97-3690-4b85-9171-cd47704b9779/cute_paw_empty_state_1777311702584.png"),
+                height: 200,
+                errorBuilder: (context, error, stackTrace) => Icon(Icons.pets, size: 100, color: themeColor[200]),
+              ),
+            const SizedBox(height: 16),
+            Text(
+              viewModel.searchQuery.isEmpty ? "Belum ada catatan nih..." : "Catatan tidak ditemukan",
+              style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500),
+            ),
+            if (viewModel.searchQuery.isEmpty)
+              TextButton(
+                onPressed: () => viewModel.fetchTemplates(),
+                child: Text("Ambil Template dari API", style: TextStyle(color: themeColor)),
+              )
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: notes.length,
+      itemBuilder: (_, i) {
+        final note = notes[i];
+        return Hero(
+          tag: note.id,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: themeColor.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16),
+                title: Text(
+                  note.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      note.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: themeColor[300]),
+                        const SizedBox(width: 4),
+                        Text(
+                          DateFormat('dd MMM, HH:mm').format(note.date),
+                          style: TextStyle(fontSize: 12, color: themeColor[300], fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
+                  onPressed: () => _confirmDelete(viewModel, note),
+                ),
                 onTap: () async {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          DetailNotePage(note: notes[i], color: widget.themeColor),
+                      builder: (_) => DetailNotePage(note: note, color: themeColor),
                     ),
                   );
 
-                  if (result != null) {
-                    setState(() => notes[i] = result);
+                  if (result != null && context.mounted) {
+                    viewModel.updateNote(note.id, result["title"], result["content"]);
                   }
                 },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: widget.themeColor[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        "${i + 1}. ",
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Expanded(
-                        child: Text(
-                          notes[i]["title"] ?? "",
-                          style: const TextStyle(fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDelete(NoteViewModel viewModel, Note note) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Hapus Catatan?"),
+        content: const Text("Catatan yang dihapus tidak bisa dikembalikan lho."),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          TextButton(
+            onPressed: () {
+              viewModel.deleteNote(note.id);
+              Navigator.pop(ctx);
             },
-          );
+            child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 // ======================== DETAIL NOTE PAGE =============================
 
 class DetailNotePage extends StatelessWidget {
-  final Map<String, dynamic> note;
+  final Note note;
   final MaterialColor color;
 
   const DetailNotePage({super.key, required this.note, required this.color});
@@ -244,12 +400,14 @@ class DetailNotePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: color[100],
-        title: const Text("Detail Catatan"),
+        elevation: 0,
+        title: const Text("Detail Catatan", style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
+            icon: const Icon(Icons.edit_note_rounded, size: 28),
             onPressed: () async {
               final result = await Navigator.push(
                 context,
@@ -263,11 +421,32 @@ class DetailNotePage extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Text(
-          note["content"] ?? "",
-          style: const TextStyle(fontSize: 16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Hero(
+              tag: note.id,
+              child: Material(
+                color: Colors.transparent,
+                child: Text(
+                  note.title,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              DateFormat('EEEE, dd MMMM yyyy').format(note.date),
+              style: TextStyle(color: color[700], fontWeight: FontWeight.w500),
+            ),
+            const Divider(height: 40),
+            Text(
+              note.content,
+              style: const TextStyle(fontSize: 18, height: 1.6),
+            ),
+          ],
         ),
       ),
     );
@@ -278,7 +457,7 @@ class DetailNotePage extends StatelessWidget {
 
 class AddNotePage extends StatefulWidget {
   final MaterialColor color;
-  final Map<String, dynamic>? oldNote;
+  final Note? oldNote;
 
   const AddNotePage({super.key, required this.color, this.oldNote});
 
@@ -288,7 +467,6 @@ class AddNotePage extends StatefulWidget {
 
 class _AddNotePageState extends State<AddNotePage> {
   final TextEditingController titleController = TextEditingController();
-
   List<Map<String, dynamic>> blocks = [];
   final List<TextEditingController> _blockControllers = [];
   final List<FocusNode> _blockFocus = [];
@@ -296,10 +474,9 @@ class _AddNotePageState extends State<AddNotePage> {
   @override
   void initState() {
     super.initState();
-
     if (widget.oldNote != null) {
-      titleController.text = widget.oldNote!["title"] ?? "";
-      _loadOldContent(widget.oldNote!["content"] ?? "");
+      titleController.text = widget.oldNote!.title;
+      _loadOldContent(widget.oldNote!.content);
     } else {
       _insertBlock(type: "text");
     }
@@ -320,25 +497,17 @@ class _AddNotePageState extends State<AddNotePage> {
     final block = {"type": type, "text": text, "done": false};
     final controller = TextEditingController(text: text);
     final focus = FocusNode();
-
     blocks.add(block);
     _blockControllers.add(controller);
     _blockFocus.add(focus);
-
     controller.addListener(() {
       block["text"] = controller.text;
     });
-
     setState(() {});
-  }
-
-  void addChecklistBlock() {
-    _insertBlock(type: "check");
   }
 
   String _blocksToString() {
     final list = <String>[];
-
     for (var b in blocks) {
       if (b["type"] == "check") {
         final done = b["done"] == true ? "☑" : "☐";
@@ -350,180 +519,161 @@ class _AddNotePageState extends State<AddNotePage> {
     return list.join("\n");
   }
 
-  // ===================== DIALOG =====================
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: widget.color[100],
+        elevation: 0,
+        title: Text(widget.oldNote != null ? "Edit Catatan" : "Catatan Baru", style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.color,
+            minimumSize: const Size(double.infinity, 56),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+          onPressed: () {
+            Navigator.pop(context, {
+              "title": titleController.text,
+              "content": _blocksToString(),
+            });
+          },
+          child: const Text("Simpan Catatan", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: TextField(
+              controller: titleController,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                hintText: "Judul catatan...",
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              itemCount: blocks.length,
+              itemBuilder: (_, i) {
+                final b = blocks[i];
+                final c = _blockControllers[i];
+                final f = _blockFocus[i];
 
-  void _showSimpleDialog(String title) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+                if (b["type"] == "check") {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: b["done"] == true,
+                          activeColor: widget.color,
+                          onChanged: (val) => setState(() => b["done"] = val),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: c,
+                            focusNode: f,
+                            textInputAction: TextInputAction.done,
+                            onChanged: (text) {
+                              if (text.endsWith("\n")) {
+                                c.text = text.replaceAll("\n", "");
+                                _insertBlock(type: "check");
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  _blockFocus.last.requestFocus();
+                                });
+                              }
+                            },
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 6),
+                            ),
+                          ),
+                        )
+                      ],
+                    ),
+                  );
+                }
+                return TextField(
+                  controller: c,
+                  focusNode: f,
+                  maxLines: null,
+                  decoration: const InputDecoration(border: InputBorder.none, hintText: "Mulai menulis..."),
+                );
+              },
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Oke"),
-          ),
+          _buildToolbar(),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: widget.color[100],
-        title: Text(widget.oldNote != null ? "Edit Catatan" : "Catatan Baru"),
+  Widget _buildToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        color: widget.color[100],
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            buildBottomIcon(Icons.check_box, addChecklistBlock),
-            buildBottomIcon(Icons.notifications, () {
-              _showSimpleDialog("Pengaturan Notifikasi");
-            }),
-            buildBottomIcon(Icons.calendar_month, () {
-              _showSimpleDialog("Pengaturan Kalender");
-            }),
-            buildBottomIcon(Icons.image, _showImageOptions)
-          ],
-        ),
-      ),
-
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                hintText: "Judul catatan...",
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: ListView.builder(
-                itemCount: blocks.length,
-                itemBuilder: (_, i) {
-                  final b = blocks[i];
-                  final c = _blockControllers[i];
-                  final f = _blockFocus[i];
-
-                  if (b["type"] == "check") {
-                    return Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              b["done"] = !(b["done"] == true);
-                            });
-                          },
-                          child: Text(
-                            b["done"] == true ? "☑" : "☐",
-                            style: const TextStyle(fontSize: 22),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: c,
-                            focusNode: f,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.symmetric(vertical: 6),
-                            ),
-                          ),
-                        )
-                      ],
-                    );
-                  }
-
-                  return TextField(
-                    controller: c,
-                    focusNode: f,
-                    maxLines: null,
-                    decoration:
-                        const InputDecoration(border: InputBorder.none),
-                  );
-                },
-              ),
-            ),
-
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.color,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              onPressed: () {
-                Navigator.pop(context, {
-                  "title": titleController.text,
-                  "content": _blocksToString(),
-                });
-              },
-              child: const Text(
-                "Simpan Catatan",
-                style: TextStyle(color: Colors.white),
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showImageOptions() {
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-      builder: (_) {
-        return Container(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _optionButton("Kamera", Icons.photo_camera, () {
-                Navigator.pop(context);
-              }),
-              _optionButton("Album", Icons.photo, () {
-                Navigator.pop(context);
-              }),
-              _optionButton("Coretan", Icons.brush, () {
-                Navigator.pop(context);
-              }),
-            ],
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.check_box_outlined),
+            onPressed: () => _insertBlock(type: "check"),
+            tooltip: "Tambah Checklist",
           ),
-        );
-      },
-    );
-  }
-
-  Widget _optionButton(String title, IconData icon, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, size: 26),
-      title: Text(title, style: const TextStyle(fontSize: 18)),
-      onTap: onTap,
-    );
-  }
-
-  Widget buildBottomIcon(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: CircleAvatar(
-        radius: 20,
-        backgroundColor: widget.color[200],
-        child: Icon(icon, color: Colors.black),
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () async {
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.now(),
+              );
+              if (time != null && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Pengingat dipasang jam: ${time.format(context)}")),
+                );
+              }
+            },
+            tooltip: "Pasang Pengingat",
+          ),
+          IconButton(
+            icon: const Icon(Icons.calendar_today_rounded),
+            onPressed: () async {
+              final date = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (date != null && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Tanggal diatur ke: ${DateFormat('dd MMM yyyy').format(date)}")),
+                );
+              }
+            },
+            tooltip: "Pilih Tanggal",
+          ),
+          IconButton(
+            icon: const Icon(Icons.image_outlined),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Fitur Gambar akan segera hadir di update berikutnya! 🐾")),
+              );
+            },
+            tooltip: "Tambah Gambar",
+          ),
+        ],
       ),
     );
   }
