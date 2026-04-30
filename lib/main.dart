@@ -132,7 +132,11 @@ class _NotesPageState extends State<NotesPage> {
                   );
 
                   if (result != null && context.mounted) {
-                    viewModel.addNote(result["title"], result["content"]);
+                    viewModel.addNote(
+                    result["title"],
+                    result["content"],
+                    result["background"],
+                  );
                   }
                 },
                 icon: const Icon(Icons.add, color: Colors.white),
@@ -356,7 +360,7 @@ class _NotesPageState extends State<NotesPage> {
                   );
 
                   if (result != null && context.mounted) {
-                    viewModel.updateNote(note.id, result["title"], result["content"]);
+                    viewModel.updateNote(note.id, result["title"], result["content"], result["background"]);
                   }
                 },
               ),
@@ -390,63 +394,75 @@ class _NotesPageState extends State<NotesPage> {
 }
 
 // ======================== DETAIL NOTE PAGE =============================
-
 class DetailNotePage extends StatelessWidget {
   final Note note;
   final MaterialColor color;
 
-  const DetailNotePage({super.key, required this.note, required this.color});
+  const DetailNotePage({
+    super.key,
+    required this.note,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: color[100],
-        elevation: 0,
-        title: const Text("Detail Catatan", style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_note_rounded, size: 28),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddNotePage(color: color, oldNote: note),
-                ),
-              );
-
-              if (result != null) Navigator.pop(context, result);
-            },
-          ),
-        ],
+    return Container(
+      decoration: BoxDecoration(
+        image: note.background != null
+            ? DecorationImage(
+                image: AssetImage(note.background!),
+                fit: BoxFit.cover,
+              )
+            : null,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Hero(
-              tag: note.id,
-              child: Material(
-                color: Colors.transparent,
-                child: Text(
-                  note.title,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              DateFormat('EEEE, dd MMMM yyyy').format(note.date),
-              style: TextStyle(color: color[700], fontWeight: FontWeight.w500),
-            ),
-            const Divider(height: 40),
-            Text(
-              note.content,
-              style: const TextStyle(fontSize: 18, height: 1.6),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+
+        appBar: AppBar(
+          backgroundColor: color[100],
+          elevation: 0,
+          title: const Text("Detail Catatan"),
+
+          // 🔥 INI YANG KAMU BUTUH (TOMBOL EDIT)
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddNotePage(
+                      color: color,
+                      oldNote: note, // kirim data lama
+                    ),
+                  ),
+                );
+
+                // 🔥 kirim balik hasil edit ke halaman sebelumnya
+                if (result != null && context.mounted) {
+                  Navigator.pop(context, result);
+                }
+              },
             ),
           ],
+        ),
+
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                note.title,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(note.content),
+            ],
+          ),
         ),
       ),
     );
@@ -466,6 +482,17 @@ class AddNotePage extends StatefulWidget {
 }
 
 class _AddNotePageState extends State<AddNotePage> {
+
+  String? selectedBackground;
+
+  final List<String> wallpapers = [
+    'assets/wallpaper1.jpg',
+    'assets/wallpaper2.jpg',
+    'assets/wallpaper3.jpg',
+    'assets/wallpaper4.jpg',
+    'assets/wallpaper5.jpg',
+  ];
+
   final TextEditingController titleController = TextEditingController();
   List<Map<String, dynamic>> blocks = [];
   final List<TextEditingController> _blockControllers = [];
@@ -476,6 +503,7 @@ class _AddNotePageState extends State<AddNotePage> {
     super.initState();
     if (widget.oldNote != null) {
       titleController.text = widget.oldNote!.title;
+      selectedBackground = widget.oldNote!.background; // penting
       _loadOldContent(widget.oldNote!.content);
     } else {
       _insertBlock(type: "text");
@@ -497,12 +525,15 @@ class _AddNotePageState extends State<AddNotePage> {
     final block = {"type": type, "text": text, "done": false};
     final controller = TextEditingController(text: text);
     final focus = FocusNode();
+
     blocks.add(block);
     _blockControllers.add(controller);
     _blockFocus.add(focus);
+
     controller.addListener(() {
       block["text"] = controller.text;
     });
+
     setState(() {});
   }
 
@@ -521,108 +552,125 @@ class _AddNotePageState extends State<AddNotePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: widget.color[100],
-        elevation: 0,
-        title: Text(widget.oldNote != null ? "Edit Catatan" : "Catatan Baru", style: const TextStyle(fontWeight: FontWeight.bold)),
+    return Container(
+      decoration: BoxDecoration(
+        image: selectedBackground != null
+            ? DecorationImage(
+                image: AssetImage(selectedBackground!),
+                fit: BoxFit.cover,
+              )
+            : null,
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: widget.color,
-            minimumSize: const Size(double.infinity, 56),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
+      child: Scaffold(
+        backgroundColor: Colors.transparent, // WAJIB
+
+        appBar: AppBar(
+          backgroundColor: widget.color[100],
+          elevation: 0,
+          title: Text(
+            widget.oldNote != null ? "Edit Catatan" : "Catatan Baru",
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          onPressed: () {
-            Navigator.pop(context, {
-              "title": titleController.text,
-              "content": _blocksToString(),
-            });
-          },
-          child: const Text("Simpan Catatan", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
         ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: TextField(
-              controller: titleController,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                hintText: "Judul catatan...",
-                border: InputBorder.none,
-              ),
+
+        bottomNavigationBar: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.color,
+              minimumSize: const Size(double.infinity, 56),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () {
+              Navigator.pop(context, {
+                "title": titleController.text,
+                "content": _blocksToString(),
+                "background": selectedBackground, // penting
+              });
+            },
+            child: const Text(
+              "Simpan Catatan",
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold),
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              itemCount: blocks.length,
-              itemBuilder: (_, i) {
-                final b = blocks[i];
-                final c = _blockControllers[i];
-                final f = _blockFocus[i];
+        ),
 
-                if (b["type"] == "check") {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: TextField(
+                controller: titleController,
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(
+                  hintText: "Judul catatan...",
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: blocks.length,
+                itemBuilder: (_, i) {
+                  final b = blocks[i];
+                  final c = _blockControllers[i];
+                  final f = _blockFocus[i];
+
+                  if (b["type"] == "check") {
+                    return Row(
                       children: [
                         Checkbox(
                           value: b["done"] == true,
-                          activeColor: widget.color,
-                          onChanged: (val) => setState(() => b["done"] = val),
+                          onChanged: (val) =>
+                              setState(() => b["done"] = val),
                         ),
                         Expanded(
                           child: TextField(
                             controller: c,
                             focusNode: f,
-                            textInputAction: TextInputAction.done,
-                            onChanged: (text) {
-                              if (text.endsWith("\n")) {
-                                c.text = text.replaceAll("\n", "");
-                                _insertBlock(type: "check");
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  _blockFocus.last.requestFocus();
-                                });
-                              }
-                            },
                             decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 6),
-                            ),
+                                border: InputBorder.none),
                           ),
                         )
                       ],
+                    );
+                  }
+
+                  return TextField(
+                    controller: c,
+                    focusNode: f,
+                    maxLines: null,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: "Mulai menulis...",
                     ),
                   );
-                }
-                return TextField(
-                  controller: c,
-                  focusNode: f,
-                  maxLines: null,
-                  decoration: const InputDecoration(border: InputBorder.none, hintText: "Mulai menulis..."),
-                );
-              },
+                },
+              ),
             ),
-          ),
-          _buildToolbar(),
-        ],
+
+            _buildToolbar(),
+          ],
+        ),
       ),
     );
   }
 
+  // ================= TOOLBAR =================
   Widget _buildToolbar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: Colors.grey[100],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -630,7 +678,6 @@ class _AddNotePageState extends State<AddNotePage> {
           IconButton(
             icon: const Icon(Icons.check_box_outlined),
             onPressed: () => _insertBlock(type: "check"),
-            tooltip: "Tambah Checklist",
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
@@ -639,13 +686,14 @@ class _AddNotePageState extends State<AddNotePage> {
                 context: context,
                 initialTime: TimeOfDay.now(),
               );
-              if (time != null && mounted) {
+              if (time != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Pengingat dipasang jam: ${time.format(context)}")),
+                  SnackBar(
+                      content:
+                          Text("Jam: ${time.format(context)}")),
                 );
               }
             },
-            tooltip: "Pasang Pengingat",
           ),
           IconButton(
             icon: const Icon(Icons.calendar_today_rounded),
@@ -656,24 +704,69 @@ class _AddNotePageState extends State<AddNotePage> {
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
-              if (date != null && mounted) {
+              if (date != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Tanggal diatur ke: ${DateFormat('dd MMM yyyy').format(date)}")),
+                  SnackBar(
+                      content: Text(
+                          DateFormat('dd MMM yyyy').format(date))),
                 );
               }
             },
-            tooltip: "Pilih Tanggal",
           ),
-          IconButton(
-            icon: const Icon(Icons.image_outlined),
+         IconButton(
+            icon: const Icon(Icons.brush),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Fitur Gambar akan segera hadir di update berikutnya! 🐾")),
-              );
-            },
-            tooltip: "Tambah Gambar",
-          ),
+            showModalBottomSheet(
+              context: context,
+              builder: (_) => _buildWallpaperPicker(),
+            );
+          },
+        ),
+
         ],
+      ),
+    );
+  }
+
+  // ================= PICKER =================
+  Widget _buildWallpaperPicker() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      height: 200,
+      child: GridView.builder(
+        itemCount: wallpapers.length,
+        gridDelegate:
+            const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+        ),
+        itemBuilder: (context, index) {
+          final bg = wallpapers[index];
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                selectedBackground = bg;
+              });
+              Navigator.pop(context);
+            },
+            child: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selectedBackground == bg
+                      ? Colors.pink
+                      : Colors.transparent,
+                  width: 2,
+                ),
+                image: DecorationImage(
+                  image: AssetImage(bg),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

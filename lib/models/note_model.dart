@@ -3,12 +3,14 @@ class Note {
   String title;
   String content;
   DateTime date;
+  String? background;
 
   Note({
     required this.id,
     required this.title,
     required this.content,
     required this.date,
+    this.background,
   });
 
   // Convert to Map for JSON / SharedPreferences
@@ -18,6 +20,7 @@ class Note {
       'title': title,
       'content': content,
       'date': date.toIso8601String(),
+      'background': background
     };
   }
 
@@ -28,6 +31,25 @@ class Note {
       title: map['title'],
       content: map['content'],
       date: DateTime.parse(map['date']),
+      background: map['background'],
     );
   }
+
+  Note copyWith({
+  String? title,
+  String? content,
+  String? background,
+}) {
+  return Note(
+    id: id,
+    title: title ?? this.title,
+    content: content ?? this.content,
+    background: background ?? this.background,
+    date: date,
+  );
 }
+
+  
+}
+
+
