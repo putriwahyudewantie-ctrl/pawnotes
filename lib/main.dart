@@ -423,6 +423,7 @@ class DetailNotePage extends StatelessWidget {
           elevation: 0,
           title: const Text("Detail Catatan"),
 
+          // 🔥 INI YANG KAMU BUTUH (TOMBOL EDIT)
           actions: [
             IconButton(
               icon: const Icon(Icons.edit),
@@ -437,6 +438,7 @@ class DetailNotePage extends StatelessWidget {
                   ),
                 );
 
+                // 🔥 kirim balik hasil edit ke halaman sebelumnya
                 if (result != null && context.mounted) {
                   Navigator.pop(context, result);
                 }
