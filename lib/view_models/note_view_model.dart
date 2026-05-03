@@ -52,34 +52,32 @@ class NoteViewModel extends ChangeNotifier {
   }
 
   // Add Note
-  Future<void> addNote(String title, String content, String? background) async {
-  final newNote = Note(
-    id: DateTime.now().millisecondsSinceEpoch.toString(),
-    title: title,
-    content: content,
-    date: DateTime.now(),
-    background: background, 
-  );
-
-  _notes.add(newNote);
-  await _storageService.saveNotes(_notes);
-  notifyListeners();
-}
-
-
-  // Update Note
- void updateNote(String id, String title, String content, String? background) {
-  final index = _notes.indexWhere((n) => n.id == id);
-  if (index != -1) {
-    _notes[index] = _notes[index].copyWith(
+  Future<void> addNote(String title, String content) async {
+    final newNote = Note(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
       content: content,
-      background: background,
+      date: DateTime.now(),
     );
+    _notes.add(newNote);
+    await _storageService.saveNotes(_notes);
     notifyListeners();
   }
-}
 
+  // Update Note
+  Future<void> updateNote(String id, String title, String content) async {
+    final index = _notes.indexWhere((n) => n.id == id);
+    if (index != -1) {
+      _notes[index] = Note(
+        id: id,
+        title: title,
+        content: content,
+        date: DateTime.now(),
+      );
+      await _storageService.saveNotes(_notes);
+      notifyListeners();
+    }
+  }
 
   // Delete Note
   Future<void> deleteNote(String id) async {
@@ -105,4 +103,3 @@ class NoteViewModel extends ChangeNotifier {
     notifyListeners();
   }
 }
-
