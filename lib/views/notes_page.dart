@@ -76,7 +76,7 @@ class _NotesPageState extends State<NotesPage> {
               children: [
                 if (currentPage == 0) _buildSearchBar(viewModel, themeColor),
                 Expanded(
-                  child: currentPage == 0 ? buildHome(viewModel, themeColor) : Container(),
+                  child: buildHome(viewModel, themeColor),
                 ),
               ],
             ),
@@ -95,12 +95,23 @@ class _NotesPageState extends State<NotesPage> {
                   );
 
                   if (result != null && context.mounted) {
-                    viewModel.addNote(result["title"], result["content"]);
+                    viewModel.addNote(
+                      result["title"],
+                      result["content"],
+                      reminderDate: result["reminderDate"],
+                      selectedDate: result["selectedDate"],
+                      imageUrl: result["imageUrl"],
+                    );
                   }
                 },
                 icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text("Catatan Baru",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  "Catatan Baru",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               )
             : null,
         bottomNavigationBar: _buildBottomNav(themeColor),
@@ -117,7 +128,8 @@ class _NotesPageState extends State<NotesPage> {
         onChanged: (v) => viewModel.setSearchQuery(v),
         decoration: InputDecoration(
           hintText: "Cari catatan...",
-          prefixIcon: const Icon(Icons.search),
+          hintStyle: TextStyle(color: Colors.grey[400]),
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
@@ -150,7 +162,10 @@ class _NotesPageState extends State<NotesPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Pilih Tema Favorit", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              "Pilih Tema Favorit",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -210,11 +225,19 @@ class _NotesPageState extends State<NotesPage> {
           setState(() {
             currentPage = index;
             showThemeOptions = index == 1;
+            // Jika pindah ke tab Home dari Tema, tutup picker
+            if (index == 0) showThemeOptions = false;
           });
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Beranda"),
-          BottomNavigationBarItem(icon: Icon(Icons.palette_rounded), label: "Tema"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_rounded),
+            label: "Beranda",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.palette_rounded),
+            label: "Tema",
+          ),
         ],
       ),
     );
@@ -232,18 +255,32 @@ class _NotesPageState extends State<NotesPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.pets, size: 100, color: Colors.grey), // Menggunakan icon standar untuk semua platform
+            Icon(
+              Icons.pets,
+              size: 100,
+              color: themeColor.withOpacity(0.5), // Warna pink transparan seperti di gambar
+            ),
 
             const SizedBox(height: 16),
             Text(
-              viewModel.searchQuery.isEmpty ? "Belum ada catatan nih..." : "Catatan tidak ditemukan",
-              style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500),
+              viewModel.searchQuery.isEmpty
+                  ? "Belum ada catatan nih..."
+                  : "Catatan tidak ditemukan",
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
             ),
             if (viewModel.searchQuery.isEmpty)
               TextButton(
                 onPressed: () => viewModel.fetchTemplates(),
-                child: Text("Ambil Template dari API", style: TextStyle(color: themeColor)),
-              )
+                child: Text(
+                  "Ambil Template dari API",
+                  style: TextStyle(
+                    color: themeColor,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -275,7 +312,10 @@ class _NotesPageState extends State<NotesPage> {
                 contentPadding: const EdgeInsets.all(16),
                 title: Text(
                   note.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
                 ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,32 +328,126 @@ class _NotesPageState extends State<NotesPage> {
                       style: TextStyle(color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.access_time, size: 14, color: themeColor[300]),
-                        const SizedBox(width: 4),
-                        Text(
-                          DateFormat('dd MMM, HH:mm').format(note.date),
-                          style: TextStyle(fontSize: 12, color: themeColor[300], fontWeight: FontWeight.w600),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: themeColor[300],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('dd MMM, HH:mm').format(note.date),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: themeColor[300],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
+                        if (note.selectedDate != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 14,
+                                color: themeColor[300],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat(
+                                  'dd MMM, HH:mm',
+                                ).format(note.selectedDate!),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: themeColor[300],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (note.reminderDate != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.notifications,
+                                size: 14,
+                                color: themeColor[300],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat(
+                                  'dd MMM, HH:mm',
+                                ).format(note.reminderDate!),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: themeColor[300],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (note.imageUrl != null && note.imageUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              note.imageUrl!,
+                              height: 120,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, _, __) => Container(
+                                height: 80,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
+                  icon: const Icon(
+                    Icons.delete_sweep_outlined,
+                    color: Colors.redAccent,
+                  ),
                   onPressed: () => _confirmDelete(viewModel, note),
                 ),
                 onTap: () async {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => DetailNotePage(note: note, color: themeColor),
+                      builder: (_) =>
+                          DetailNotePage(note: note, color: themeColor),
                     ),
                   );
 
                   if (result != null && context.mounted) {
-                    viewModel.updateNote(note.id, result["title"], result["content"]);
+                    viewModel.updateNote(
+                      note.id,
+                      result["title"],
+                      result["content"],
+                      reminderDate: result["reminderDate"],
+                      selectedDate: result["selectedDate"],
+                      imageUrl: result["imageUrl"],
+                    );
                   }
                 },
               ),
@@ -329,10 +463,15 @@ class _NotesPageState extends State<NotesPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Hapus Catatan?"),
-        content: const Text("Catatan yang dihapus tidak bisa dikembalikan lho."),
+        content: const Text(
+          "Catatan yang dihapus tidak bisa dikembalikan lho.",
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
           TextButton(
             onPressed: () {
               viewModel.deleteNote(note.id);

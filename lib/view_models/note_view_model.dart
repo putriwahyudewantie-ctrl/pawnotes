@@ -3,12 +3,16 @@ import '../models/note_model.dart'; // Import model Note
 import '../services/storage_service.dart'; // Import storage service untuk simpan/load lokal
 import '../services/api_service.dart'; // Import API service untuk ambil template
 
-class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNotifier (MVVM + Provider)
-  final StorageService _storageService = StorageService(); // Instance service untuk CRUD lokal
-  final ApiService _apiService = ApiService(); // Instance service untuk fetch template API
+class NoteViewModel extends ChangeNotifier {
+  // ViewModel menggunakan ChangeNotifier (MVVM + Provider)
+  final StorageService _storageService =
+      StorageService(); // Instance service untuk CRUD lokal
+  final ApiService _apiService =
+      ApiService(); // Instance service untuk fetch template API
 
   List<Note> _notes = []; // List semua catatan
-  bool _isLoading = false; // Status loading, dipakai untuk tampilkan progress indicator
+  bool _isLoading =
+      false; // Status loading, dipakai untuk tampilkan progress indicator
   String _searchQuery = ""; // Query search bar
   MaterialColor _themeColor = Colors.pink; // Warna tema default
 
@@ -20,11 +24,14 @@ class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNoti
 
   // Getter untuk catatan yang sudah difilter berdasarkan searchQuery
   List<Note> get filteredNotes {
-    if (_searchQuery.isEmpty) return _notes; // Jika query kosong, return semua notes
+    if (_searchQuery.isEmpty)
+      return _notes; // Jika query kosong, return semua notes
     return _notes
-        .where((note) =>
-            note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            note.content.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where(
+          (note) =>
+              note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              note.content.toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
         .toList(); // Filter notes sesuai title/content
   }
 
@@ -57,7 +64,13 @@ class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNoti
     final colorValue = await _storageService.loadTheme();
     if (colorValue != null) {
       // Mencari MaterialColor yang cocok berdasarkan value
-      final colors = [Colors.pink, Colors.blue, Colors.green, Colors.orange, Colors.purple];
+      final colors = [
+        Colors.pink,
+        Colors.blue,
+        Colors.green,
+        Colors.orange,
+        Colors.purple,
+      ];
       for (var color in colors) {
         if (color.value == colorValue) {
           _themeColor = color;
@@ -73,19 +86,30 @@ class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNoti
     _isLoading = true;
     notifyListeners(); // Tampilkan progress indicator
 
-    _notes = await _storageService.loadNotes(); // Ambil list Note dari SharedPreferences
-    
+    _notes = await _storageService
+        .loadNotes(); // Ambil list Note dari SharedPreferences
+
     _isLoading = false;
     notifyListeners(); // Selesai loading, rebuild UI
   }
 
   // Tambah note baru
-  Future<void> addNote(String title, String content) async {
+  Future<void> addNote(
+    String title,
+    String content, {
+    DateTime? reminderDate,
+    DateTime? selectedDate,
+    String? imageUrl,
+  }) async {
     final newNote = Note(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // ID unik dari timestamp
+      id: DateTime.now().millisecondsSinceEpoch
+          .toString(), // ID unik dari timestamp
       title: title, // Judul catatan baru
       content: content, // Isi catatan baru
       date: DateTime.now(), // Timestamp sekarang
+      reminderDate: reminderDate, // Tanggal pengingat opsional
+      selectedDate: selectedDate, // Tanggal tambahan opsional
+      imageUrl: imageUrl, // Gambar opsional
     );
     _notes.add(newNote); // Tambah ke list notes
     await _storageService.saveNotes(_notes); // Simpan ke storage lokal
@@ -93,14 +117,26 @@ class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNoti
   }
 
   // Update note existing
-  Future<void> updateNote(String id, String title, String content) async {
-    final index = _notes.indexWhere((n) => n.id == id); // Cari index note berdasarkan id
+  Future<void> updateNote(
+    String id,
+    String title,
+    String content, {
+    DateTime? reminderDate,
+    DateTime? selectedDate,
+    String? imageUrl,
+  }) async {
+    final index = _notes.indexWhere(
+      (n) => n.id == id,
+    ); // Cari index note berdasarkan id
     if (index != -1) {
       _notes[index] = Note(
         id: id, // Tetap pakai id lama
         title: title, // Update title
         content: content, // Update content
-        date: DateTime.now(), // Update timestamp sekarang
+        date: _notes[index].date, // Pertahankan tanggal pembuatan asli
+        reminderDate: reminderDate, // Update tanggal pengingat
+        selectedDate: selectedDate, // Update tanggal tambahan
+        imageUrl: imageUrl, // Update gambar
       );
       await _storageService.saveNotes(_notes); // Simpan perubahan
       notifyListeners(); // Rebuild UI
@@ -120,10 +156,12 @@ class NoteViewModel extends ChangeNotifier { // ViewModel menggunakan ChangeNoti
     notifyListeners(); // Tampilkan progress indicator
 
     try {
-      final templates = await _apiService.fetchNoteTemplates(); // Ambil templates dari API
+      final templates = await _apiService
+          .fetchNoteTemplates(); // Ambil templates dari API
       _notes.insertAll(0, templates); // Insert template di awal list notes
       await _storageService.saveNotes(_notes); // Simpan ke storage lokal
-    } catch (e) { // Tangani error API
+    } catch (e) {
+      // Tangani error API
       debugPrint("API Error: $e"); // Cetak error ke console
     }
 
