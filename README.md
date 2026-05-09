@@ -1,97 +1,46 @@
-# PawNotes
+🐾 PawNotes - Flutter MVVM Notes Application
+PawNotes adalah aplikasi catatan modern berbasis Flutter yang dirancang dengan arsitektur MVVM (Model-View-ViewModel). Aplikasi ini menawarkan pengalaman mencatat yang estetik, responsif, dan fungsional dengan tema unik "Paw" (jejak kaki hewan).
 
-## 1. Dependencies
+1. Dependencies (Library Utama)
+Daftar library utama yang digunakan dalam project ini:
 
-Bagian **Dependencies** berisi library atau package yang digunakan dalam project PawNotes. Library ini dapat dilihat pada file `pubspec.yaml`.
+flutter: Framework utama UI.
+cupertino_icons: Menyediakan ikon bergaya iOS.
+provider: State Management untuk mengatur alur data dan tema secara reaktif.
+shared_preferences: Media penyimpanan data lokal permanen (Persistence Layer).
+http: Melakukan request data ke REST API eksternal untuk mengambil template.
+intl: Memformat tampilan tanggal dan waktu pada catatan agar lebih rapi.
 
-Library yang digunakan dalam project ini adalah:
+2. Description (Deskripsi Aplikasi)
+PawNotes bukan sekadar aplikasi catatan biasa. Aplikasi ini dibangun dengan standar coding industri untuk memastikan performa yang stabil dan tampilan yang menarik.
 
-- **flutter**  
-  Framework utama yang digunakan untuk membuat aplikasi mobile PawNotes.
+Fitur Unggulan:
 
-- **cupertino_icons: ^1.0.8**  
-  Digunakan untuk menyediakan ikon bergaya iOS pada aplikasi Flutter.
+Arsitektur MVVM: Pemisahan kode yang bersih antara logika (ViewModel) dan tampilan (View).
+Auto-Save System: Menggunakan fitur PopScope untuk menyimpan catatan secara otomatis saat user meninggalkan halaman, mencegah kehilangan data.
+Responsive Web-Mobile Frame: Tampilan khusus di browser yang dibatasi seukuran layar HP dengan efek shadow premium agar tetap estetik di monitor besar.
+Checklist Mode: Mendukung pembuatan daftar tugas dengan fitur centang dan hapus baris dinamis.
+Real API Templates: Mengambil contoh catatan dari API publik yang di-mapping otomatis ke Bahasa Indonesia.
+Theme Persistence: Pilihan tema warna tetap tersimpan meskipun aplikasi ditutup.
 
-- **provider: ^6.1.5+1**  
-  Digunakan untuk state management, yaitu mengatur perubahan data pada aplikasi seperti data catatan, pencarian, dan tema.
+3. User (Target Pengguna)
+Aplikasi PawNotes dirancang untuk:
 
-- **shared_preferences: ^2.5.5**  
-  Digunakan untuk menyimpan data catatan secara lokal di perangkat pengguna, sehingga data tetap tersimpan walaupun aplikasi ditutup.
+Pelajar/Mahasiswa: Mencatat tugas kuliah atau ringkasan materi secara cepat.
+Productivity Seekers: Membuat daftar belanja atau daftar kegiatan harian (To-Do List).
+Pengguna Umum: Siapa saja yang membutuhkan aplikasi catatan sederhana dengan UI yang ramah dan estetik.
 
-- **http: ^1.6.0**  
-  Digunakan untuk mengambil data dari API. Pada aplikasi ini, package http dipakai untuk mengambil template catatan dari internet.
+4. How to Install (Cara Instalasi)
+Ikuti langkah-langkah berikut untuk menjalankan project:
 
-- **intl: ^0.20.2**  
-  Digunakan untuk memformat tanggal dan waktu agar tampilan tanggal pada catatan lebih rapi dan mudah dibaca.
-
-Selain itu, pada bagian **dev_dependencies** terdapat:
-
-- **flutter_test**  
-  Digunakan untuk kebutuhan testing pada Flutter.
-
-- **flutter_lints: ^5.0.0**  
-  Digunakan untuk membantu menjaga kualitas penulisan kode agar sesuai standar Flutter.
-
-## 2. Description
-
-**PawNotes** adalah aplikasi catatan sederhana berbasis Flutter. Aplikasi ini dibuat untuk membantu pengguna membuat, menyimpan, mencari, mengedit, dan menghapus catatan.
-
-Aplikasi ini memiliki tampilan bertema **paw** atau jejak kaki hewan, sehingga tampilannya lebih menarik dan ramah digunakan. Pengguna dapat membuat catatan biasa maupun checklist. Selain itu, aplikasi juga menyediakan pilihan tema warna seperti pink, biru, hijau, oranye, dan ungu.
-
-Data catatan disimpan secara lokal menggunakan **SharedPreferences**, sehingga catatan tetap tersimpan walaupun aplikasi ditutup. Aplikasi ini juga memiliki fitur mengambil template catatan dari API sebagai contoh catatan awal.
-
-## 3. User
-
-Target pengguna aplikasi **PawNotes** adalah orang-orang yang membutuhkan aplikasi catatan sederhana untuk kegiatan sehari-hari.
-
-Contoh pengguna aplikasi ini adalah:
-
-- Pelajar atau mahasiswa yang ingin mencatat tugas dan materi belajar.
-- Pengguna umum yang ingin membuat daftar belanja atau daftar kegiatan.
-- Orang yang suka membuat checklist harian.
-- Pengguna yang ingin menyimpan ide, rencana, atau catatan singkat secara cepat.
-
-Dengan tampilan yang sederhana, aplikasi ini mudah digunakan oleh pengguna baru karena fitur-fiturnya tidak rumit.
-
-## 4. How to Install
-
-Untuk menjalankan project **PawNotes**, ikuti langkah-langkah berikut:
-
-### 1. Install Flutter dan Dart
-
-Pastikan perangkat sudah menginstall **Flutter SDK** dan **Dart SDK**.
-
-### 2. Download atau Clone Project
-
-Download project PawNotes atau clone repository dari GitHub.
-
-```bash
-git clone <link-repository>
-```
-
-### 3. Masuk ke Folder Project
-
-```bash
-cd pawnotes-main
-```
-
-### 4. Install Dependencies
-
-Jalankan perintah berikut di terminal untuk menginstall semua library yang ada di `pubspec.yaml`:
-
-```bash
+Instal Flutter & Dart: Pastikan perangkat Anda sudah terinstal Flutter SDK versi terbaru.
+Download/Clone Project:
+bash
+git clone https://github.com/putriwahyudewantie-ctrl/pawnotes.git
+Instal Library: Masuk ke folder project dan jalankan:
+bash
 flutter pub get
-```
-
-### 5. Jalankan Aplikasi
-
-Setelah dependency selesai diinstall, jalankan aplikasi dengan perintah:
-
-```bash
+Jalankan Aplikasi:
+bash
 flutter run
-```
-
-### 6. Pilih Device atau Emulator
-
-Pilih device atau emulator yang tersedia, lalu aplikasi **PawNotes** akan berjalan.
-
+Dibuat untuk memenuhi standar kualitas aplikasi mobile modern.
