@@ -32,21 +32,25 @@ Aplikasi PawNotes dirancang untuk memenuhi berbagai kebutuhan:
 Ikuti langkah-langkah berikut untuk menjalankan project di perangkat lokal Anda:
 
 Instal Flutter & Dart: Pastikan perangkat Anda sudah terinstal Flutter SDK versi terbaru.
+
 Clone Project:
 bash
 git clone https://github.com/putriwahyudewantie-ctrl/pawnotes.git
+
 Instal Library:
 bash
 flutter pub get
+
 Jalankan Aplikasi:
 bash
 flutter run
-📐 Arsitektur Folder Proyek:
 
-text
+📐 Arsitektur Folder Proyek:
+Text
 lib/
 ├── models/         # Struktur data (Note Model)
 ├── view_models/    # Logika bisnis & state (NoteViewModel)
 ├── views/          # Halaman UI (NotesPage, AddPage, DetailPage)
 ├── services/       # Komunikasi luar (API & Storage)
 └── main.dart       # Entry point aplikasi
+
