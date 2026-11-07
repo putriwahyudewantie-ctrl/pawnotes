@@ -1,171 +1,318 @@
-import 'package:flutter/material.dart'; // Flutter framework untuk UI & ChangeNotifier
-import '../models/note_model.dart'; // Import model Note
-import '../services/storage_service.dart'; // Import storage service untuk simpan/load lokal
-import '../services/api_service.dart'; // Import API service untuk ambil template
+import 'package:flutter/material.dart';
+
+import '../models/note_model.dart';
+import '../services/api_service.dart';
+import '../services/reminder_service.dart';
+import '../services/storage_service.dart';
 
 class NoteViewModel extends ChangeNotifier {
-  // ViewModel menggunakan ChangeNotifier (MVVM + Provider)
-  final StorageService _storageService =
-      StorageService(); // Instance service untuk CRUD lokal
-  final ApiService _apiService =
-      ApiService(); // Instance service untuk fetch template API
+  final StorageService _storageService = StorageService();
+  final ApiService _apiService = ApiService();
+  final ReminderService _reminderService = ReminderService.instance;
 
-  List<Note> _notes = []; // List semua catatan
-  bool _isLoading =
-      false; // Status loading, dipakai untuk tampilkan progress indicator
-  String _searchQuery = ""; // Query search bar
-  MaterialColor _themeColor = Colors.pink; // Warna tema default
+  List<Note> _notes = [];
+  bool _isLoading = false;
+  String _searchQuery = '';
+  MaterialColor _themeColor = Colors.pink;
+  String? _themeImagePath;
+  bool _isDarkMode = false;
+  String? _fontFamily;
+  bool _hasPrivateVault = false;
+  bool _isPrivateUnlocked = false;
+  String? _privateCredentialType;
+  bool _isAppLockEnabled = false;
+  String? _appLockCredentialType;
+  late final Future<void> _initialization;
 
-  // Getter untuk variabel private agar bisa diakses View
-  List<Note> get notes => _notes; // Semua catatan
-  bool get isLoading => _isLoading; // Status loading
-  MaterialColor get themeColor => _themeColor; // Tema saat ini
-  String get searchQuery => _searchQuery; // Query pencarian
+  List<Note> get notes => _notes;
+  bool get isLoading => _isLoading;
+  MaterialColor get themeColor => _themeColor;
+  String? get themeImagePath => _themeImagePath;
+  String get searchQuery => _searchQuery;
+  bool get isDarkMode => _isDarkMode;
+  String? get fontFamily => _fontFamily;
+  bool get hasPrivateVault => _hasPrivateVault;
+  bool get isPrivateUnlocked => _isPrivateUnlocked;
+  String? get privateCredentialType => _privateCredentialType;
+  bool get isAppLockEnabled => _isAppLockEnabled;
+  String? get appLockCredentialType => _appLockCredentialType;
+  Future<void> get initialized => _initialization;
+  List<String> get folders =>
+      {'Umum', ..._notes.map((note) => note.folder)}.toList()..sort();
 
-  // Getter untuk catatan yang sudah difilter berdasarkan searchQuery
   List<Note> get filteredNotes {
-    if (_searchQuery.isEmpty)
-      return _notes; // Jika query kosong, return semua notes
-    return _notes
-        .where(
-          (note) =>
-              note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              note.content.toLowerCase().contains(_searchQuery.toLowerCase()),
-        )
-        .toList(); // Filter notes sesuai title/content
+    final query = _searchQuery.toLowerCase();
+    return _notes.where((note) {
+      return note.title.toLowerCase().contains(query) ||
+          note.content.toLowerCase().contains(query) ||
+          note.folder.toLowerCase().contains(query);
+    }).toList();
   }
 
-  // Constructor, otomatis load notes & theme saat ViewModel dibuat
   NoteViewModel() {
-    _initializeData();
+    _initialization = _initializeData();
   }
 
-  // Gabungan inisialisasi data
   Future<void> _initializeData() async {
-    await loadNotes(); // Load notes dari storage lokal
-    await _loadTheme(); // Load tema dari storage lokal
-  }
-
-  // Update query search dan notifikasi view
-  void setSearchQuery(String query) {
-    _searchQuery = query;
-    notifyListeners(); // Memberitahu view rebuild UI
-  }
-
-  // Update theme color dan notifikasi view
-  void updateTheme(MaterialColor color) {
-    _themeColor = color;
-    _storageService.saveTheme(color.value); // Simpan pilihan tema ke storage
-    notifyListeners(); // Rebuild UI dengan warna baru
-  }
-
-  // Load tema dari storage
-  Future<void> _loadTheme() async {
-    final colorValue = await _storageService.loadTheme();
-    if (colorValue != null) {
-      // Mencari MaterialColor yang cocok berdasarkan value
-      final colors = [
-        Colors.pink,
-        Colors.blue,
-        Colors.green,
-        Colors.orange,
-        Colors.purple,
-      ];
-      for (var color in colors) {
-        if (color.value == colorValue) {
+    await loadNotes();
+    final settings = await _storageService.loadSettings();
+    _isDarkMode = settings.isDarkMode;
+    _fontFamily = settings.fontFamily;
+    _themeImagePath = await _storageService.loadThemeImage();
+    _hasPrivateVault = await _storageService.hasPrivateVault();
+    _privateCredentialType = await _storageService.privateCredentialType();
+    _isAppLockEnabled = await _storageService.hasAppLock();
+    _appLockCredentialType = await _storageService.appLockCredentialType();
+    final savedColor = await _storageService.loadTheme();
+    if (savedColor != null) {
+      for (final color in _availableColors) {
+        if (color.toARGB32() == savedColor) {
           _themeColor = color;
           break;
         }
       }
-      notifyListeners();
     }
+    notifyListeners();
   }
 
-  // Load notes dari storage lokal
+  static const List<MaterialColor> _availableColors = [
+    Colors.pink,
+    Colors.blue,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.teal,
+    Colors.indigo,
+    Colors.deepOrange,
+  ];
+
+  List<MaterialColor> get availableColors => _availableColors;
+
+  Future<void> configureAppLock(
+    String credential, {
+    required bool isPin,
+  }) async {
+    await _storageService.configureAppLock(credential, isPin: isPin);
+    _isAppLockEnabled = true;
+    _appLockCredentialType = isPin ? 'pin' : 'password';
+    notifyListeners();
+  }
+
+  Future<bool> verifyAppLock(String credential) =>
+      _storageService.verifyAppLock(credential);
+
+  Future<void> disableAppLock() async {
+    await _storageService.disableAppLock();
+    _isAppLockEnabled = false;
+    _appLockCredentialType = null;
+    notifyListeners();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  Future<void> updateTheme(MaterialColor color) async {
+    _themeColor = color;
+    await _storageService.saveTheme(color.toARGB32());
+    notifyListeners();
+  }
+
+  Future<void> updateThemeImage(String? imagePath) async {
+    await _storageService.saveThemeImage(imagePath);
+    _themeImagePath = imagePath;
+    notifyListeners();
+  }
+
+  Future<void> updateDarkMode(bool value) async {
+    _isDarkMode = value;
+    await _storageService.saveSettings(
+      isDarkMode: _isDarkMode,
+      fontFamily: _fontFamily,
+    );
+    notifyListeners();
+  }
+
+  Future<void> updateFont(String? value) async {
+    _fontFamily = value;
+    await _storageService.saveSettings(
+      isDarkMode: _isDarkMode,
+      fontFamily: _fontFamily,
+    );
+    notifyListeners();
+  }
+
   Future<void> loadNotes() async {
     _isLoading = true;
-    notifyListeners(); // Tampilkan progress indicator
-
-    _notes = await _storageService
-        .loadNotes(); // Ambil list Note dari SharedPreferences
-
+    notifyListeners();
+    final unlockedPrivateNotes = _isPrivateUnlocked
+        ? _notes.where((note) => note.isPrivate).toList()
+        : <Note>[];
+    _notes = [...await _storageService.loadNotes(), ...unlockedPrivateNotes];
     _isLoading = false;
-    notifyListeners(); // Selesai loading, rebuild UI
+    notifyListeners();
   }
 
-  // Tambah note baru
-  Future<void> addNote(
+  Future<String?> addNote(
     String title,
     String content, {
     DateTime? reminderDate,
     DateTime? selectedDate,
     String? imageUrl,
+    String folder = 'Umum',
+    bool isPrivate = false,
+    List<String> attachments = const [],
   }) async {
-    final newNote = Note(
-      id: DateTime.now().millisecondsSinceEpoch
-          .toString(), // ID unik dari timestamp
-      title: title, // Judul catatan baru
-      content: content, // Isi catatan baru
-      date: DateTime.now(), // Timestamp sekarang
-      reminderDate: reminderDate, // Tanggal pengingat opsional
-      selectedDate: selectedDate, // Tanggal tambahan opsional
-      imageUrl: imageUrl, // Gambar opsional
+    if (isPrivate && !_isPrivateUnlocked) {
+      throw StateError('Buka folder pribadi sebelum membuat catatan privat.');
+    }
+    _notes.insert(
+      0,
+      Note(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        title: title,
+        content: content,
+        date: DateTime.now(),
+        reminderDate: reminderDate,
+        selectedDate: selectedDate,
+        imageUrl: imageUrl,
+        folder: folder,
+        isPrivate: isPrivate,
+        attachments: List.of(attachments),
+      ),
     );
-    _notes.add(newNote); // Tambah ke list notes
-    await _storageService.saveNotes(_notes); // Simpan ke storage lokal
-    notifyListeners(); // Rebuild UI
+    await _persistNotes();
+    return _syncReminder(_notes.first);
   }
 
-  // Update note existing
-  Future<void> updateNote(
+  Future<String?> saveDraft(Note note) async {
+    await _initialization;
+    if (note.isPrivate && !_isPrivateUnlocked) {
+      throw StateError('Buka folder pribadi sebelum menyimpan catatan privat.');
+    }
+    final index = _notes.indexWhere((savedNote) => savedNote.id == note.id);
+    if (index == -1) {
+      _notes.insert(0, note);
+    } else {
+      _notes[index] = note;
+    }
+    await _persistNotes();
+    return _syncReminder(note);
+  }
+
+  Future<void> createPrivateVault(
+    String credential, {
+    required bool isPin,
+  }) async {
+    await _initialization;
+    final privateNotes = await _storageService.createPrivateVault(
+      credential,
+      isPin: isPin,
+    );
+    _hasPrivateVault = true;
+    _isPrivateUnlocked = true;
+    _privateCredentialType = isPin ? 'pin' : 'password';
+    _notes = [..._notes.where((note) => !note.isPrivate), ...privateNotes];
+    notifyListeners();
+  }
+
+  Future<bool> unlockPrivateVault(String credential) async {
+    await _initialization;
+    final privateNotes = await _storageService.unlockPrivateVault(credential);
+    if (privateNotes == null) return false;
+    _isPrivateUnlocked = true;
+    _notes = [..._notes.where((note) => !note.isPrivate), ...privateNotes];
+    notifyListeners();
+    return true;
+  }
+
+  void lockPrivateVault() {
+    if (!_isPrivateUnlocked) return;
+    _notes.removeWhere((note) => note.isPrivate);
+    _isPrivateUnlocked = false;
+    _storageService.lockPrivateVault();
+    notifyListeners();
+  }
+
+  Future<String?> updateNote(
     String id,
     String title,
     String content, {
     DateTime? reminderDate,
     DateTime? selectedDate,
     String? imageUrl,
+    String? folder,
+    bool? isPrivate,
+    List<String>? attachments,
   }) async {
-    final index = _notes.indexWhere(
-      (n) => n.id == id,
-    ); // Cari index note berdasarkan id
-    if (index != -1) {
-      _notes[index] = Note(
-        id: id, // Tetap pakai id lama
-        title: title, // Update title
-        content: content, // Update content
-        date: _notes[index].date, // Pertahankan tanggal pembuatan asli
-        reminderDate: reminderDate, // Update tanggal pengingat
-        selectedDate: selectedDate, // Update tanggal tambahan
-        imageUrl: imageUrl, // Update gambar
+    final index = _notes.indexWhere((note) => note.id == id);
+    if (index == -1) return null;
+    final oldNote = _notes[index];
+    _notes[index] = Note(
+      id: id,
+      title: title,
+      content: content,
+      date: oldNote.date,
+      reminderDate: reminderDate,
+      selectedDate: selectedDate,
+      imageUrl: imageUrl,
+      folder: folder ?? oldNote.folder,
+      isArchived: oldNote.isArchived,
+      isPrivate: isPrivate ?? oldNote.isPrivate,
+      attachments: List.of(attachments ?? oldNote.attachments),
+    );
+    await _persistNotes();
+    return _syncReminder(_notes[index]);
+  }
+
+  Future<void> toggleArchived(String id) async {
+    final note = _notes.firstWhere((note) => note.id == id);
+    note.isArchived = !note.isArchived;
+    await _persistNotes();
+  }
+
+  Future<String?> togglePrivacy(String id) async {
+    final note = _notes.firstWhere((note) => note.id == id);
+    if (!note.isPrivate && !_isPrivateUnlocked) {
+      throw StateError(
+        'Buka folder pribadi sebelum menjadikan catatan privat.',
       );
-      await _storageService.saveNotes(_notes); // Simpan perubahan
-      notifyListeners(); // Rebuild UI
     }
+    note.isPrivate = !note.isPrivate;
+    await _persistNotes();
+    return _syncReminder(note);
   }
 
-  // Delete note
   Future<void> deleteNote(String id) async {
-    _notes.removeWhere((n) => n.id == id); // Hapus note berdasarkan id
-    await _storageService.saveNotes(_notes); // Simpan perubahan
-    notifyListeners(); // Rebuild UI
+    await _reminderService.cancelReminder(id);
+    _notes.removeWhere((note) => note.id == id);
+    await _persistNotes();
   }
 
-  // Fetch templates dari API
   Future<void> fetchTemplates() async {
     _isLoading = true;
-    notifyListeners(); // Tampilkan progress indicator
-
+    notifyListeners();
     try {
-      final templates = await _apiService
-          .fetchNoteTemplates(); // Ambil templates dari API
-      _notes.insertAll(0, templates); // Insert template di awal list notes
-      await _storageService.saveNotes(_notes); // Simpan ke storage lokal
-    } catch (e) {
-      // Tangani error API
-      debugPrint("API Error: $e"); // Cetak error ke console
+      final templates = await _apiService.fetchNoteTemplates();
+      _notes.insertAll(0, templates);
+      await _storageService.saveNotes(_notes);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
 
-    _isLoading = false;
-    notifyListeners(); // Selesai, rebuild UI
+  Future<void> _persistNotes() async {
+    await _storageService.saveNotes(_notes);
+    notifyListeners();
+  }
+
+  Future<String?> _syncReminder(Note note) async {
+    try {
+      return await _reminderService.syncReminder(note);
+    } catch (error) {
+      return 'Pengingat gagal dijadwalkan: $error';
+    }
   }
 }

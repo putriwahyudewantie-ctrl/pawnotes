@@ -1,56 +1,61 @@
 class Note {
-  String
-  id; // Unique identifier untuk setiap catatan, digunakan untuk update, delete, dan Hero animations
-  String title; // Judul catatan, ditampilkan di list dan detail
-  String content; // Isi catatan, bisa gabungan text dan checklist
-  DateTime
-  date; // Tanggal & waktu pembuatan catatan, dipakai untuk sorting dan menampilkan timestamp
-  DateTime? reminderDate; // Tanggal pengingat opsional untuk catatan
-  DateTime? selectedDate; // Tanggal tambahan yang dipilih lewat tombol kalender
-  String? imageUrl; // URL atau path gambar catatan
+  String id;
+  String title;
+  String content;
+  DateTime date;
+  DateTime? reminderDate;
+  DateTime? selectedDate;
+  String? imageUrl;
+  String folder;
+  bool isArchived;
+  bool isPrivate;
+  List<String> attachments;
 
   Note({
-    required this.id, // Parameter wajib saat membuat Note baru
-    required this.title, // Parameter wajib: judul catatan
-    required this.content, // Parameter wajib: isi catatan
-    required this.date, // Parameter wajib: tanggal catatan dibuat
-    this.reminderDate, // Parameter opsional: tanggal pengingat
-    this.selectedDate, // Parameter opsional: tanggal yang dipilih
-    this.imageUrl, // Parameter opsional: path/URL gambar
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.date,
+    this.reminderDate,
+    this.selectedDate,
+    this.imageUrl,
+    this.folder = 'Umum',
+    this.isArchived = false,
+    this.isPrivate = false,
+    this.attachments = const [],
   });
 
-  // Convert to Map for JSON / SharedPreferences
-  // Digunakan saat ingin menyimpan catatan ke storage lokal atau mengirim ke API
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id, // key 'id' akan menyimpan id catatan
-      'title': title, // key 'title' akan menyimpan judul catatan
-      'content': content, // key 'content' akan menyimpan isi catatan
-      'date': date
-          .toIso8601String(), // key 'date' disimpan sebagai string ISO agar mudah disimpan/load
-      'reminderDate': reminderDate
-          ?.toIso8601String(), // key 'reminderDate' untuk reminder opsional
-      'selectedDate': selectedDate
-          ?.toIso8601String(), // key 'selectedDate' untuk tanggal tambahan
-      'imageUrl': imageUrl, // key 'imageUrl' untuk gambar opsional
-    };
-  }
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'content': content,
+    'date': date.toIso8601String(),
+    'reminderDate': reminderDate?.toIso8601String(),
+    'selectedDate': selectedDate?.toIso8601String(),
+    'imageUrl': imageUrl,
+    'folder': folder,
+    'isArchived': isArchived,
+    'isPrivate': isPrivate,
+    'attachments': attachments,
+  };
 
-  // Create Note from Map
-  // Digunakan saat mengambil data dari storage/API dan mengubahnya menjadi objek Note
-  factory Note.fromMap(Map<String, dynamic> map) {
-    return Note(
-      id: map['id'], // Ambil id dari map
-      title: map['title'], // Ambil title dari map
-      content: map['content'], // Ambil content dari map
-      date: DateTime.parse(map['date']), // Parse string ISO menjadi DateTime
-      reminderDate: map['reminderDate'] != null
-          ? DateTime.parse(map['reminderDate'])
-          : null, // Parse reminderDate jika ada
-      selectedDate: map['selectedDate'] != null
-          ? DateTime.parse(map['selectedDate'])
-          : null, // Parse selectedDate jika ada
-      imageUrl: map['imageUrl'] as String?, // Ambil imageUrl jika ada
-    );
-  }
+  factory Note.fromMap(Map<String, dynamic> map) => Note(
+    id: map['id'] as String,
+    title: map['title'] as String,
+    content: map['content'] as String,
+    date: DateTime.parse(map['date'] as String),
+    reminderDate: map['reminderDate'] == null
+        ? null
+        : DateTime.parse(map['reminderDate'] as String),
+    selectedDate: map['selectedDate'] == null
+        ? null
+        : DateTime.parse(map['selectedDate'] as String),
+    imageUrl: map['imageUrl'] as String?,
+    folder: map['folder'] as String? ?? 'Umum',
+    isArchived: map['isArchived'] as bool? ?? false,
+    isPrivate: map['isPrivate'] as bool? ?? false,
+    attachments: (map['attachments'] as List<dynamic>? ?? [])
+        .whereType<String>()
+        .toList(),
+  );
 }

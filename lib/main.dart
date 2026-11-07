@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'view_models/note_view_model.dart';
 import 'views/notes_page.dart';
 
@@ -17,7 +18,8 @@ class PawNotesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeColor = context.watch<NoteViewModel>().themeColor;
+    final viewModel = context.watch<NoteViewModel>();
+    final themeColor = viewModel.themeColor;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -25,26 +27,50 @@ class PawNotesApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: themeColor,
-        fontFamily: 'Inter',
+        fontFamily: viewModel.fontFamily,
+        brightness: viewModel.isDarkMode ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: ColorScheme.fromSeed(
+          seedColor: themeColor,
+          brightness: viewModel.isDarkMode ? Brightness.dark : Brightness.light,
+        ).surface,
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: themeColor,
+        fontFamily: viewModel.fontFamily,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: ColorScheme.fromSeed(
+          seedColor: themeColor,
+          brightness: Brightness.dark,
+        ).surface,
+      ),
+      themeMode: viewModel.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       builder: (context, child) {
-        return Container(
-          color: const Color(0xFFF0F0F0), // Warna background di luar area HP
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 450), // Batas lebar layar HP
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final contentWidth = constraints.maxWidth >= 1200
+                ? 1120.0
+                : constraints.maxWidth;
+            return ColoredBox(
+              color: Theme.of(context).colorScheme.surface,
+              child: Center(
+                child: Container(
+                  width: contentWidth,
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 30,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                ],
+                  child: child,
+                ),
               ),
-              child: child,
-            ),
-          ),
+            );
+          },
         );
       },
       home: const NotesPage(),
