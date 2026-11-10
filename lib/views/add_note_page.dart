@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:image_picker/image_picker.dart';
+import 'camera_capture_page.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -208,6 +210,7 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
   String _checklistMarker = '✅';
   final List<String> _attachments = [];
   final AudioRecorder _recorder = AudioRecorder();
+  final ImagePicker _imagePicker = ImagePicker();
   bool _isRecording = false;
   bool _hasSavedDraft = false;
   String? _lastReminderWarning;
@@ -483,314 +486,325 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
             ),
           ),
         ),
-        body: NoteThemeBackground(
-          imagePath: widget.viewModel.themeImagePath,
-          isDarkMode: widget.viewModel.isDarkMode,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 840),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surface.withValues(alpha: 0.42),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: titleController,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+        
+body: NoteThemeBackground(
+  imagePath: widget.viewModel.themeImagePath,
+  isDarkMode: widget.viewModel.isDarkMode,
+  child: Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 840),
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 12),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme.surface
+                          .withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: titleController,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Judul catatan...',
+                            filled: true,
+                            fillColor: Theme.of(context)
+                                .colorScheme.surface
+                                .withValues(alpha: 0.58),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
                             ),
-                            decoration: InputDecoration(
-                              hintText: 'Judul catatan...',
-                              filled: true,
-                              fillColor: Theme.of(
-                                context,
-                              ).colorScheme.surface.withValues(alpha: 0.58),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
                             ),
                           ),
-                          Row(
-                            children: [
-                              const Icon(Icons.folder_outlined, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: DropdownButton<String>(
-                                  value: _selectedFolder,
-                                  isExpanded: true,
-                                  underline: const SizedBox.shrink(),
-                                  items: _folderOptions()
-                                      .map(
-                                        (folder) => DropdownMenuItem(
-                                          value: folder,
-                                          child: Text(folder),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value == '+ folder') {
-                                      _createFolder();
-                                    } else if (value != null) {
-                                      setState(() => _selectedFolder = value);
-                                      _scheduleAutoSave();
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.lock_outline, size: 18),
-                              Switch(
-                                value: _isPrivate,
-                                activeTrackColor: widget.color,
-                                onChanged: (value) async {
-                                  if (value &&
-                                      !widget.viewModel.isPrivateUnlocked) {
-                                    final allowed = await widget
-                                        .onRequirePrivateAccess();
-                                    if (!mounted || !allowed) return;
-                                  }
-                                  setState(() => _isPrivate = value);
-                                  _scheduleAutoSave();
-                                },
-                              ),
-                            ],
-                          ),
-                          if (_attachments.isNotEmpty)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Wrap(
-                                spacing: 8,
-                                children: _attachments
+                        ),
+                        Row(
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButton<String>(
+                                value: _selectedFolder,
+                                isExpanded: true,
+                                underline: const SizedBox.shrink(),
+                                items: _folderOptions()
                                     .map(
-                                      (path) => InputChip(
-                                        avatar: Icon(
-                                          _isImagePath(path)
-                                              ? Icons.image_outlined
-                                              : path.toLowerCase().endsWith(
-                                                  '.m4a',
-                                                )
-                                              ? Icons.mic
-                                              : Icons.attach_file,
-                                          size: 16,
-                                        ),
-                                        label: SizedBox(
-                                          width: 140,
-                                          child: Text(
-                                            p.basename(path),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        onPressed: () =>
-                                            _openAttachment(context, path),
-                                        onDeleted: () {
-                                          setState(
-                                            () => _attachments.remove(path),
-                                          );
-                                          _scheduleAutoSave();
-                                        },
+                                      (folder) => DropdownMenuItem(
+                                        value: folder,
+                                        child: Text(folder),
                                       ),
                                     )
                                     .toList(),
+                                onChanged: (value) {
+                                  if (value == '+ folder') {
+                                    _createFolder();
+                                  } else if (value != null) {
+                                    setState(() => _selectedFolder = value);
+                                    _scheduleAutoSave();
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.lock_outline, size: 18),
+                            Switch(
+                              value: _isPrivate,
+                              activeTrackColor: widget.color,
+                              onChanged: (value) async {
+                                if (value &&
+                                    !widget.viewModel.isPrivateUnlocked) {
+                                  final allowed = await widget
+                                      .onRequirePrivateAccess();
+                                  if (!mounted || !allowed) return;
+                                }
+                                setState(() => _isPrivate = value);
+                                _scheduleAutoSave();
+                              },
+                            ),
+                          ],
+                        ),
+                        if (_attachments.isNotEmpty)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 8,
+                              children: _attachments.map((path) {
+                                return InputChip(
+                                  avatar: Icon(
+                                    _isImagePath(path)
+                                        ? Icons.image_outlined
+                                        : path.toLowerCase().endsWith('.m4a')
+                                            ? Icons.mic
+                                            : Icons.attach_file,
+                                    size: 16,
+                                  ),
+                                  label: SizedBox(
+                                    width: 140,
+                                    child: Text(
+                                      p.basename(path),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      _openAttachment(context, path),
+                                  onDeleted: () {
+                                    setState(
+                                      () => _attachments.remove(path),
+                                    );
+                                    _scheduleAutoSave();
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                if (_selectedReminderDate != null ||
+                    _selectedDate != null ||
+                    _selectedImageUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme.surface
+                            .withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_selectedReminderDate != null)
+                            _buildMetadataRow(
+                              icon: Icons.notifications,
+                              label:
+                                  "Pengingat: ${DateFormat('dd MMM yyyy, HH:mm').format(_selectedReminderDate!)}",
+                              onClear: () {
+                                setState(
+                                  () => _selectedReminderDate = null,
+                                );
+                                _scheduleAutoSave();
+                              },
+                            ),
+                          if (_selectedDate != null)
+                            _buildMetadataRow(
+                              icon: Icons.calendar_today,
+                              label:
+                                  "Tanggal: ${DateFormat('dd MMM yyyy, HH:mm').format(_selectedDate!)}",
+                              onClear: () {
+                                setState(() => _selectedDate = null);
+                                _scheduleAutoSave();
+                              },
+                            ),
+                          if (_selectedImageUrl != null)
+                            _selectedImagePreview(
+                              context,
+                              _selectedImageUrl!,
+                              onRemove: () {
+                                setState(() => _selectedImageUrl = null);
+                                _scheduleAutoSave();
+                              },
+                              onTap: () => _showImagePreview(
+                                context,
+                                _selectedImageUrl!,
                               ),
                             ),
                         ],
                       ),
                     ),
                   ),
-                  if (_selectedReminderDate != null ||
-                      _selectedDate != null ||
-                      _selectedImageUrl != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surface.withValues(alpha: 0.42),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            if (_selectedReminderDate != null)
-                              _buildMetadataRow(
-                                icon: Icons.notifications,
-                                label:
-                                    "Pengingat: ${DateFormat('dd MMM yyyy, HH:mm').format(_selectedReminderDate!)}",
-                                onClear: () {
-                                  setState(() => _selectedReminderDate = null);
-                                  _scheduleAutoSave();
-                                },
-                              ),
-                            if (_selectedDate != null)
-                              _buildMetadataRow(
-                                icon: Icons.calendar_today,
-                                label:
-                                    "Tanggal: ${DateFormat('dd MMM yyyy, HH:mm').format(_selectedDate!)}",
-                                onClear: () {
-                                  setState(() => _selectedDate = null);
-                                  _scheduleAutoSave();
-                                },
-                              ),
-                            if (_selectedImageUrl != null)
-                              _selectedImagePreview(
-                                context,
-                                _selectedImageUrl!,
-                                onRemove: () {
-                                  setState(() => _selectedImageUrl = null);
-                                  _scheduleAutoSave();
-                                },
-                                onTap: () => _showImagePreview(
-                                  context,
-                                  _selectedImageUrl!,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      itemCount: blocks.length,
-                      itemBuilder: (_, i) {
-                        final b = blocks[i];
-                        final c = _blockControllers[i];
-                        final f = _blockFocus[i];
 
-                        if (b["type"] == "check") {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surface.withValues(alpha: 0.46),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    tooltip: b["done"] == true
-                                        ? 'Tandai belum selesai'
-                                        : 'Tandai selesai',
-                                    onPressed: () {
-                                      setState(
-                                        () => b["done"] = !(b["done"] == true),
-                                      );
-                                      _scheduleAutoSave();
-                                    },
-                                    icon: Text(
-                                      b["marker"] as String? ?? '✅',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        decoration: b["done"] == true
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: c,
-                                      focusNode: f,
-                                      maxLines: null,
-                                      style: TextStyle(
-                                        decoration: b["done"] == true
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
-                                      textInputAction: TextInputAction.newline,
-                                      onChanged: (text) {
-                                        final lines = text.split('\n');
-                                        if (lines.length > 1) {
-                                          c.value = TextEditingValue(
-                                            text: lines.first,
-                                            selection: TextSelection.collapsed(
-                                              offset: lines.first.length,
-                                            ),
-                                          );
-                                          for (
-                                            var lineIndex = 1;
-                                            lineIndex < lines.length;
-                                            lineIndex++
-                                          ) {
-                                            _insertBlock(
-                                              type: "text",
-                                              text: lines[lineIndex],
-                                              index: i + lineIndex,
-                                            );
-                                          }
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                                if (mounted &&
-                                                    _blockFocus.length >
-                                                        i + 1) {
-                                                  _blockFocus[i + 1]
-                                                      .requestFocus();
-                                                }
-                                              });
-                                        }
-                                      },
-                                      decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          vertical: 6,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.close,
-                                      size: 20,
-                                      color: Colors.grey,
-                                    ),
-                                    onPressed: () => _removeBlock(i),
-                                  ),
-                                ],
-                              ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: List.generate(blocks.length, (i) {
+                      final b = blocks[i];
+                      final c = _blockControllers[i];
+                      final f = _blockFocus[i];
+
+                      if (b["type"] == "check") {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme.surface
+                                  .withValues(alpha: 0.46),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        }
-                        return TextField(
-                          controller: c,
-                          focusNode: f,
-                          maxLines: null,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Mulai menulis...',
-                            filled: true,
-                            fillColor: Theme.of(
-                              context,
-                            ).colorScheme.surface.withValues(alpha: 0.46),
-                            contentPadding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  tooltip: b["done"] == true
+                                      ? 'Tandai belum selesai'
+                                      : 'Tandai selesai',
+                                  onPressed: () {
+                                    setState(() {
+                                      b["done"] = !(b["done"] == true);
+                                    });
+                                    _scheduleAutoSave();
+                                  },
+                                  icon: Text(
+                                    b["marker"] as String? ?? '✅',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      decoration: b["done"] == true
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: c,
+                                    focusNode: f,
+                                    maxLines: null,
+                                    style: TextStyle(
+                                      decoration: b["done"] == true
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                    textInputAction:
+                                        TextInputAction.newline,
+                                    onChanged: (text) {
+                                      final lines = text.split('\n');
+                                      if (lines.length > 1) {
+                                        c.value = TextEditingValue(
+                                          text: lines.first,
+                                          selection:
+                                              TextSelection.collapsed(
+                                            offset: lines.first.length,
+                                          ),
+                                        );
+                                        for (
+                                          var lineIndex = 1;
+                                          lineIndex < lines.length;
+                                          lineIndex++
+                                        ) {
+                                          _insertBlock(
+                                            type: "text",
+                                            text: lines[lineIndex],
+                                            index: i + lineIndex,
+                                          );
+                                        }
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          if (mounted &&
+                                              _blockFocus.length > i + 1) {
+                                            _blockFocus[i + 1]
+                                                .requestFocus();
+                                          }
+                                        });
+                                      }
+                                    },
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    size: 20,
+                                    color: Colors.grey,
+                                  ),
+                                  onPressed: () => _removeBlock(i),
+                                ),
+                              ],
+                            ),
                           ),
                         );
-                      },
-                    ),
+                      }
+
+                      return TextField(
+                        controller: c,
+                        focusNode: f,
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Mulai menulis...',
+                          filled: true,
+                          fillColor: Theme.of(context)
+                              .colorScheme.surface
+                              .withValues(alpha: 0.46),
+                          contentPadding: const EdgeInsets.all(14),
+                        ),
+                      );
+                    }),
                   ),
-                  _buildToolbar(),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ),
+          _buildToolbar(),
+        ],
+      ),
+    ),
+  ),
+),
+
       ),
     );
   }
@@ -863,22 +877,97 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
     _scheduleAutoSave();
   }
 
-  Future<void> _pickImageUrl() async {
-    try {
-      final files = await FilePicker.pickFiles(type: FileType.image);
-      if (files.isEmpty || !mounted) return;
-      final savedPath = await _savePickedFile(files.first);
+Future<void> _pickImageUrl() async {
+  try {
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tambahkan Foto'),
+        content: const Text('Pilih sumber foto yang ingin digunakan.'),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext, ImageSource.camera);
+            },
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: const Text('Kamera'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext, ImageSource.gallery);
+            },
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Galeri'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null || !mounted) return;
+
+    if (source == ImageSource.camera) {
+      // Buka halaman kamera langsung di dalam PawNotes.
+      final XFile? photo = await Navigator.push<XFile>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const CameraCapturePage(),
+        ),
+      );
+
+      if (photo == null || !mounted) return;
+
+      final savedPath = await _saveCapturedImage(photo);
+
       if (!mounted) return;
-      setState(() => _selectedImageUrl = savedPath);
+
+      setState(() {
+        _selectedImageUrl = savedPath;
+      });
+
       _scheduleAutoSave();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gambar gagal ditambahkan: $error')),
-        );
-      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto kamera berhasil ditambahkan!'),
+        ),
+      );
+    } else {
+      // Galeri tetap menggunakan image_picker.
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1920,
+      );
+
+      if (image == null || !mounted) return;
+
+      final savedPath = await _saveCapturedImage(image);
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedImageUrl = savedPath;
+      });
+
+      _scheduleAutoSave();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto galeri berhasil ditambahkan!'),
+        ),
+      );
+    }
+  } catch (error) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gambar gagal ditambahkan: $error'),
+        ),
+      );
     }
   }
+}
+
 
   List<String> _folderOptions() {
     final folders = <String>{'Umum', ...widget.folders, _selectedFolder};
@@ -914,6 +1003,43 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
     setState(() => _selectedFolder = folder);
     _scheduleAutoSave();
   }
+
+  Future<String> _saveCapturedImage(XFile image) async {
+  final extension = p.extension(image.name).toLowerCase();
+
+  if (kIsWeb) {
+    final bytes = await image.readAsBytes();
+
+    final mimeType = switch (extension) {
+      '.png' => 'image/png',
+      '.gif' => 'image/gif',
+      '.webp' => 'image/webp',
+      '.bmp' => 'image/bmp',
+      _ => 'image/jpeg',
+    };
+
+    return 'data:$mimeType;base64,${base64Encode(bytes)}';
+  }
+
+  final directory = await getApplicationDocumentsDirectory();
+
+  final attachmentDirectory = Directory(
+    p.join(directory.path, 'pawnotes_attachments'),
+  );
+
+  await attachmentDirectory.create(recursive: true);
+
+  final safeExtension = extension.isEmpty ? '.jpg' : extension;
+
+  final destination = p.join(
+    attachmentDirectory.path,
+    'camera_${DateTime.now().microsecondsSinceEpoch}$safeExtension',
+  );
+
+  await File(image.path).copy(destination);
+
+  return destination;
+}
 
   Future<String> _savePickedFile(PlatformFile pickedFile) async {
     if (kIsWeb) {
