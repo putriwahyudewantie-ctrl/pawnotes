@@ -1161,10 +1161,14 @@ class _NotesPageState extends State<NotesPage> with WidgetsBindingObserver {
       ),
     );
 
+    // Beri waktu sampai animasi penutupan dialog selesai
+    // sebelum controller dihancurkan.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
     credentialController.dispose();
     confirmController.dispose();
-    return result;
-  }
+  return result;
+}
 
   Future<void> _createNote(
     NoteViewModel model,
