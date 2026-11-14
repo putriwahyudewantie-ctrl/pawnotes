@@ -1262,13 +1262,15 @@ class _NotesPageState extends State<NotesPage> with WidgetsBindingObserver {
   }
 
   Future<void> _showSearch(BuildContext context) async {
-    final model = context.read<NoteViewModel>();
-    await showSearch<void>(
-      context: context,
-      delegate: _NoteSearchDelegate(model),
-    );
-    if (context.mounted) model.setSearchQuery('');
-  }
+      final model = context.read<NoteViewModel>();
+      final note = await showSearch<Note?>(
+        context: context,
+        delegate: _NoteSearchDelegate(model),
+      );
+      if (!context.mounted) return;
+      model.setSearchQuery('');
+      if (note != null) await _openNote(context, model, note, model.themeColor);
+    }
 
   Future<void> _showAppearance(NoteViewModel model) async {
     await showModalBottomSheet<void>(
@@ -1606,7 +1608,7 @@ class _NotesPageState extends State<NotesPage> with WidgetsBindingObserver {
   }
 }
 
-class _NoteSearchDelegate extends SearchDelegate<void> {
+class _NoteSearchDelegate extends SearchDelegate<Note?> {
   _NoteSearchDelegate(this.model);
 
   final NoteViewModel model;
@@ -1659,10 +1661,7 @@ class _NoteSearchDelegate extends SearchDelegate<void> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              onTap: () {
-                query = note.title;
-                showResults(context);
-              },
+              onTap: () => close(context, note),
             ),
           )
           .toList(),
