@@ -164,12 +164,7 @@ class _DetailNotePageState extends State<DetailNotePage> {
                         ),
                       ],
                       const Divider(height: 36),
-                      Text(
-                        note.content,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          height: 1.65,
-                        ),
-                      ),
+                      _buildNoteContent(note.content, theme),
                       if (note.attachments.isNotEmpty) ...[
                         const SizedBox(height: 28),
                         Text(
@@ -189,6 +184,98 @@ class _DetailNotePageState extends State<DetailNotePage> {
           ),
         ),
       ),
+    );
+  }
+
+
+  static const List<String> _checklistMarkers = [
+    '✅',
+    '🐱',
+    '🐶',
+    '🐼',
+    '🐰',
+    '🦊',
+    '🐻',
+    '🐸',
+    '🐵',
+    '🌙',
+    '⭐',
+    '🌸',
+    '🌼',
+    '🌷',
+    '🌻',
+    '💖',
+    '🍓',
+    '🦋',
+    '☁️',
+  ];
+
+  Widget _buildNoteContent(String content, ThemeData theme) {
+    final lines = content.split('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: lines.map((line) {
+        final isDone = line.startsWith('☑');
+        final isChecklist = isDone || line.startsWith('☐');
+
+        if (!isChecklist) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              line,
+              style: theme.textTheme.bodyLarge?.copyWith(height: 1.65),
+            ),
+          );
+        }
+
+        // Format data yang disimpan: "☑ marker teks" atau "☐ marker teks".
+        final serializedText = line.length > 2
+            ? line.substring(2).trimLeft()
+            : '';
+
+        var marker = '✅';
+        var checklistText = serializedText;
+
+        for (final candidate in _checklistMarkers) {
+          if (serializedText == candidate ||
+              serializedText.startsWith('$candidate ')) {
+            marker = candidate;
+            checklistText = serializedText.length == candidate.length
+                ? ''
+                : serializedText.substring(candidate.length).trimLeft();
+            break;
+          }
+        }
+
+        final decoration = isDone ? TextDecoration.lineThrough : null;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                marker,
+                style: TextStyle(
+                  fontSize: 22,
+                  decoration: decoration,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  checklistText,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    height: 1.65,
+                    decoration: decoration,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 

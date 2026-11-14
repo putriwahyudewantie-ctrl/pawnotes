@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -210,9 +211,27 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
   String _checklistMarker = '✅';
   final List<String> _attachments = [];
   final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _previewPlayer = AudioPlayer();
   final ImagePicker _imagePicker = ImagePicker();
+
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<void>? _completeSubscription;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+
   bool _isRecording = false;
-  bool _hasSavedDraft = false;
+  bool _isRecordingPaused = false;
+  int _recordingSeconds = 0;
+  Timer? _recordingTimer;
+
+  String? _previewPath;
+  bool _isPreviewPlaying = false;
+  Duration _audioPosition = Duration.zero;
+  Duration _audioDuration = Duration.zero;
+  bool _isApplyingHistory = false;
+  final List<Map<String, dynamic>> _undoHistory = [];
+  final List<Map<String, dynamic>> _redoHistory = [];
+  Map<String, dynamic>? _lastEditorSnapshot;
   String? _lastReminderWarning;
   Timer? _autoSaveTimer;
   Future<String?>? _pendingSave;
@@ -223,11 +242,11 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _setupAudioPlayer();
     _draftId =
         widget.oldNote?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     _draftDate = widget.oldNote?.date ?? DateTime.now();
-    _hasSavedDraft = widget.oldNote != null;
-    titleController.addListener(_scheduleAutoSave);
+    titleController.addListener(_recordEditorChange);
     if (widget.oldNote != null) {
       titleController.text = widget.oldNote!.title;
       _loadOldContent(widget.oldNote!.content);
@@ -242,6 +261,125 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
       _isPrivate = widget.makePrivate;
       _insertBlock(type: "text");
     }
+    _lastEditorSnapshot = _captureEditorSnapshot();
+  }
+
+  Map<String, dynamic> _captureEditorSnapshot() => {
+    'title': titleController.text,
+    'blocks': blocks.map((block) => <String, dynamic>{
+      'type': block['type'],
+      'text': block['text'],
+      'done': block['done'] == true,
+      'marker': block['marker'],
+    }).toList(),
+  };
+
+  bool _sameEditorSnapshot(Map<String, dynamic> a, Map<String, dynamic> b) {
+    if (a['title'] != b['title']) return false;
+    final aa = a['blocks'] as List;
+    final bb = b['blocks'] as List;
+    if (aa.length != bb.length) return false;
+    for (var i = 0; i < aa.length; i++) {
+      final x = aa[i] as Map;
+      final y = bb[i] as Map;
+      if (x['type'] != y['type'] || x['text'] != y['text'] ||
+          x['done'] != y['done'] || x['marker'] != y['marker']) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _recordEditorChange() {
+    if (_isApplyingHistory) return;
+    final current = _captureEditorSnapshot();
+    final previous = _lastEditorSnapshot;
+    if (previous != null && !_sameEditorSnapshot(previous, current)) {
+      _undoHistory.add(previous);
+      if (_undoHistory.length > 100) _undoHistory.removeAt(0);
+      _redoHistory.clear();
+    }
+    _lastEditorSnapshot = current;
+    _scheduleAutoSave();
+  }
+
+  void _recordStructuralChange() {
+    if (_isApplyingHistory) return;
+    final previous = _lastEditorSnapshot;
+    if (previous != null) {
+      _undoHistory.add(previous);
+      if (_undoHistory.length > 100) _undoHistory.removeAt(0);
+      _redoHistory.clear();
+    }
+  }
+
+  void _restoreEditorSnapshot(Map<String, dynamic> snapshot) {
+    _isApplyingHistory = true;
+    titleController.removeListener(_recordEditorChange);
+    titleController.text = snapshot['title'] as String? ?? '';
+
+    for (final controller in _blockControllers) {
+      controller.dispose();
+    }
+    for (final focus in _blockFocus) {
+      focus.dispose();
+    }
+    _blockControllers.clear();
+    _blockFocus.clear();
+    blocks = [];
+
+    final savedBlocks = (snapshot['blocks'] as List?) ?? [];
+    for (final saved in savedBlocks) {
+      final item = Map<String, dynamic>.from(saved as Map);
+      final block = <String, dynamic>{
+        'type': item['type'] ?? 'text',
+        'text': item['text'] ?? '',
+        'done': item['done'] == true,
+        'marker': item['marker'] ?? _checklistMarker,
+      };
+      final controller = TextEditingController(text: block['text'] as String);
+      controller.addListener(() {
+        block['text'] = controller.text;
+        _recordEditorChange();
+      });
+      blocks.add(block);
+      _blockControllers.add(controller);
+      _blockFocus.add(FocusNode());
+    }
+    if (blocks.isEmpty) {
+      final block = <String, dynamic>{
+        'type': 'text', 'text': '', 'done': false, 'marker': _checklistMarker,
+      };
+      final controller = TextEditingController();
+      controller.addListener(() {
+        block['text'] = controller.text;
+        _recordEditorChange();
+      });
+      blocks.add(block);
+      _blockControllers.add(controller);
+      _blockFocus.add(FocusNode());
+    }
+    titleController.addListener(_recordEditorChange);
+    _lastEditorSnapshot = _captureEditorSnapshot();
+    _isApplyingHistory = false;
+    _scheduleAutoSave();
+    if (mounted) setState(() {});
+  }
+
+  void _undo() {
+    if (_undoHistory.isEmpty) return;
+    final current = _captureEditorSnapshot();
+    final previous = _undoHistory.removeLast();
+    _redoHistory.add(current);
+    _restoreEditorSnapshot(previous);
+  }
+
+  void _redo() {
+    if (_redoHistory.isEmpty) return;
+    final current = _captureEditorSnapshot();
+    final next = _redoHistory.removeLast();
+    _undoHistory.add(current);
+    _restoreEditorSnapshot(next);
   }
 
   void _loadOldContent(String content) {
@@ -262,6 +400,9 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
         _insertBlock(type: "text", text: line);
       }
     }
+    if (blocks.isNotEmpty && blocks.last["type"] == "check") {
+      _insertBlock(type: "text");
+    }
   }
 
   void _insertBlock({
@@ -270,6 +411,7 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
     String? marker,
     int? index,
   }) {
+    _recordStructuralChange();
     final block = {
       "type": type,
       "text": text,
@@ -284,13 +426,46 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
     _blockFocus.insert(insertAt, focus);
     controller.addListener(() {
       block["text"] = controller.text;
-      _scheduleAutoSave();
+      _recordEditorChange();
     });
+    _lastEditorSnapshot = _captureEditorSnapshot();
     setState(() {});
+  }
+
+  void _addChecklistBlock() {
+    var insertAt = blocks.length;
+
+    // Jika blok terakhir adalah area tulisan kosong, letakkan checklist
+    // tepat di atasnya agar area tulisan tetap tersedia di bagian bawah.
+    if (blocks.isNotEmpty &&
+        blocks.last["type"] == "text" &&
+        _blockControllers.last.text.trim().isEmpty) {
+      insertAt = blocks.length - 1;
+    }
+
+    _insertBlock(
+      type: "check",
+      marker: _checklistMarker,
+      index: insertAt,
+    );
+
+    // Selalu sediakan area teks biasa setelah checklist.
+    final hasTrailingText = blocks.isNotEmpty &&
+        blocks.last["type"] == "text";
+    if (!hasTrailingText) {
+      _insertBlock(type: "text", index: insertAt + 1);
+    }
+
+    final focusIndex = blocks.length - 1;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || focusIndex >= _blockFocus.length) return;
+      _blockFocus[focusIndex].requestFocus();
+    });
   }
 
   void _removeBlock(int index) {
     if (blocks.length > 1) {
+      _recordStructuralChange();
       setState(() {
         blocks.removeAt(index);
         _blockControllers[index].dispose();
@@ -298,6 +473,7 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
         _blockFocus[index].dispose();
         _blockFocus.removeAt(index);
       });
+      _lastEditorSnapshot = _captureEditorSnapshot();
       _scheduleAutoSave();
     }
   }
@@ -353,7 +529,6 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
 
   void _scheduleAutoSave() {
     if (!mounted) return;
-    _hasSavedDraft = false;
     _autoSaveTimer?.cancel();
     _autoSaveTimer = Timer(const Duration(milliseconds: 400), () {
       unawaited(
@@ -383,7 +558,6 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
           ).showSnackBar(SnackBar(content: Text(reminderWarning)));
         }
       }
-      _hasSavedDraft = true;
       if (mounted) setState(() {});
     } finally {
       if (identical(_pendingSave, save)) _pendingSave = null;
@@ -444,49 +618,44 @@ class _AddNotePageState extends State<AddNotePage> with WidgetsBindingObserver {
         appBar: AppBar(
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
           elevation: 0,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.oldNote != null ? "Edit Catatan" : "Catatan Baru",
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                _hasSavedDraft ? 'Tersimpan otomatis' : 'Simpan otomatis aktif',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ),
+          title: null,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () =>
-                _saveAndPop(), // Trigger auto-save saat tekan tombol back
-          ),
-        ),
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: widget.color,
-              minimumSize: const Size(double.infinity, 56),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20), // Sudut lebih membulat
-              ),
-              elevation: 0,
-            ),
             onPressed: _saveAndPop,
-            child: const Text(
-              "Simpan Catatan",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            tooltip: 'Kembali',
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Undo',
+              onPressed: _undoHistory.isEmpty ? null : _undo,
+              icon: const Icon(Icons.undo_rounded),
+            ),
+            IconButton(
+              tooltip: 'Redo',
+              onPressed: _redoHistory.isEmpty ? null : _redo,
+              icon: const Icon(Icons.redo_rounded),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: _saveAndPop,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFFE91E63),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.check_circle_outline, size: 19),
+                label: const Text(
+                  'Save',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-        
 body: NoteThemeBackground(
   imagePath: widget.viewModel.themeImagePath,
   isDarkMode: widget.viewModel.isDarkMode,
@@ -578,19 +747,28 @@ body: NoteThemeBackground(
                             ),
                           ],
                         ),
+                        if (_isRecording) _buildRecordingCard(),
                         if (_attachments.isNotEmpty)
-                          Align(
-                            alignment: Alignment.centerLeft,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
                             child: Wrap(
                               spacing: 8,
+                              runSpacing: 8,
                               children: _attachments.map((path) {
+                                if (_isAudioPath(path)) {
+                                  return SizedBox(
+                                    width: (MediaQuery.sizeOf(context).width - 100)
+                                        .clamp(200.0, 700.0)
+                                        .toDouble(),
+                                    child: _buildAudioPreview(path),
+                                  );
+                                }
+
                                 return InputChip(
                                   avatar: Icon(
                                     _isImagePath(path)
                                         ? Icons.image_outlined
-                                        : path.toLowerCase().endsWith('.m4a')
-                                            ? Icons.mic
-                                            : Icons.attach_file,
+                                        : Icons.attach_file,
                                     size: 16,
                                   ),
                                   label: SizedBox(
@@ -603,9 +781,9 @@ body: NoteThemeBackground(
                                   onPressed: () =>
                                       _openAttachment(context, path),
                                   onDeleted: () {
-                                    setState(
-                                      () => _attachments.remove(path),
-                                    );
+                                    setState(() {
+                                      _attachments.remove(path);
+                                    });
                                     _scheduleAutoSave();
                                   },
                                 );
@@ -1092,6 +1270,51 @@ Future<void> _pickImageUrl() async {
     }
   }
 
+  bool _isAudioPath(String path) {
+    return path.startsWith('data:audio/') ||
+        RegExp(
+          r'\.(m4a|aac|wav|mp3|ogg|flac)$',
+          caseSensitive: false,
+        ).hasMatch(path);
+  }
+
+  void _setupAudioPlayer() {
+    _positionSubscription =
+        _previewPlayer.onPositionChanged.listen((position) {
+      if (!mounted) return;
+      setState(() => _audioPosition = position);
+    });
+
+    _durationSubscription =
+        _previewPlayer.onDurationChanged.listen((duration) {
+      if (!mounted) return;
+      setState(() => _audioDuration = duration);
+    });
+
+    _completeSubscription = _previewPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _isPreviewPlaying = false;
+        _audioPosition = Duration.zero;
+      });
+    });
+
+    _playerStateSubscription =
+        _previewPlayer.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _isPreviewPlaying = state == PlayerState.playing;
+      });
+    });
+  }
+
+  String _formatAudioDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _toggleRecording() async {
     try {
       if (kIsWeb) {
@@ -1102,17 +1325,8 @@ Future<void> _pickImageUrl() async {
         );
         return;
       }
-      if (_isRecording) {
-        final recordedPath = await _recorder.stop();
-        if (mounted) {
-          setState(() {
-            if (recordedPath != null) _attachments.add(recordedPath);
-            _isRecording = false;
-          });
-          _scheduleAutoSave();
-        }
-        return;
-      }
+
+      if (_isRecording) return;
 
       if (!await _recorder.hasPermission()) {
         if (mounted) {
@@ -1122,24 +1336,282 @@ Future<void> _pickImageUrl() async {
         }
         return;
       }
+
       final directory = await getApplicationDocumentsDirectory();
       final attachmentDirectory = Directory(
         p.join(directory.path, 'pawnotes_attachments'),
       );
       await attachmentDirectory.create(recursive: true);
+
       final outputPath = p.join(
         attachmentDirectory.path,
         'voice_${DateTime.now().microsecondsSinceEpoch}.m4a',
       );
+
       await _recorder.start(const RecordConfig(), path: outputPath);
-      if (mounted) setState(() => _isRecording = true);
+
+      if (!mounted) return;
+
+      _recordingTimer?.cancel();
+      setState(() {
+        _isRecording = true;
+        _isRecordingPaused = false;
+        _recordingSeconds = 0;
+      });
+
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || !_isRecording || _isRecordingPaused) return;
+        setState(() => _recordingSeconds++);
+      });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Rekaman gagal: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Rekaman gagal: $error')),
+        );
       }
     }
+  }
+
+  Future<void> _pauseRecording() async {
+    try {
+      if (!_isRecording) return;
+
+      if (_isRecordingPaused) {
+        await _recorder.resume();
+      } else {
+        await _recorder.pause();
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isRecordingPaused = !_isRecordingPaused;
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengatur rekaman: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _finishRecording() async {
+    try {
+      if (!_isRecording) return;
+
+      _recordingTimer?.cancel();
+      final recordedPath = await _recorder.stop();
+
+      if (!mounted) return;
+
+      setState(() {
+        if (recordedPath != null && recordedPath.isNotEmpty) {
+          _attachments.add(recordedPath);
+          _previewPath = null;
+          _audioPosition = Duration.zero;
+          _audioDuration = Duration.zero;
+        }
+        _isRecording = false;
+        _isRecordingPaused = false;
+      });
+
+      _scheduleAutoSave();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyelesaikan rekaman: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _togglePreviewAudio(String path) async {
+    try {
+      if (_previewPath == path && _isPreviewPlaying) {
+        await _previewPlayer.pause();
+        return;
+      }
+
+      if (_previewPath != path) {
+        await _previewPlayer.stop();
+
+        if (path.startsWith('data:audio/')) {
+          final encodedData = path.substring(path.indexOf(',') + 1);
+          await _previewPlayer.setSource(
+            BytesSource(base64Decode(encodedData)),
+          );
+        } else if (path.startsWith('http://') ||
+            path.startsWith('https://') ||
+            path.startsWith('blob:')) {
+          await _previewPlayer.setSource(UrlSource(path));
+        } else {
+          await _previewPlayer.setSource(DeviceFileSource(path));
+        }
+
+        final duration = await _previewPlayer.getDuration();
+
+        if (!mounted) return;
+        setState(() {
+          _previewPath = path;
+          _audioPosition = Duration.zero;
+          _audioDuration = duration ?? Duration.zero;
+        });
+
+        await _previewPlayer.resume();
+      } else {
+        if (_audioDuration > Duration.zero &&
+            _audioPosition >= _audioDuration) {
+          await _previewPlayer.seek(Duration.zero);
+        }
+        await _previewPlayer.resume();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Audio tidak dapat diputar: $error')),
+        );
+      }
+    }
+  }
+
+  Widget _buildRecordingCard() {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.graphic_eq_rounded, color: widget.color, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              _formatAudioDuration(
+                Duration(seconds: _recordingSeconds),
+              ),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: _isRecordingPaused ? 'Lanjutkan' : 'Jeda',
+            onPressed: _pauseRecording,
+            icon: Icon(
+              _isRecordingPaused
+                  ? Icons.play_arrow_rounded
+                  : Icons.pause_rounded,
+              size: 30,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Selesai merekam',
+            onPressed: _finishRecording,
+            icon: const Icon(Icons.check_rounded, size: 30),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudioPreview(String path) {
+    final theme = Theme.of(context);
+    final isCurrent = _previewPath == path;
+    final isPlaying = isCurrent && _isPreviewPlaying;
+    final duration = isCurrent ? _audioDuration : Duration.zero;
+    final position = isCurrent ? _audioPosition : Duration.zero;
+
+    final double progress = duration.inMilliseconds > 0
+        ? (position.inMilliseconds / duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble()
+        : 0.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.audio_file_rounded, color: widget.color, size: 32),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  p.basename(path),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${_formatAudioDuration(position)} / '
+                  '${_formatAudioDuration(duration)}',
+                  style: theme.textTheme.labelSmall,
+                ),
+                SizedBox(
+                  height: 24,
+                  child: Slider(
+                    value: progress,
+                    onChanged: duration.inMilliseconds <= 0
+                        ? null
+                        : (value) {
+                            final newPosition = Duration(
+                              milliseconds:
+                                  (value * duration.inMilliseconds).round(),
+                            );
+                            _previewPlayer.seek(newPosition);
+                          },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: isPlaying ? 'Jeda audio' : 'Putar audio',
+            onPressed: () => _togglePreviewAudio(path),
+            icon: Icon(
+              isPlaying
+                  ? Icons.pause_circle_filled_rounded
+                  : Icons.play_circle_fill_rounded,
+              color: widget.color,
+              size: 32,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Hapus rekaman',
+            onPressed: () async {
+              if (_previewPath == path) {
+                await _previewPlayer.stop();
+                if (!mounted) return;
+                setState(() {
+                  _previewPath = null;
+                  _isPreviewPlaying = false;
+                  _audioPosition = Duration.zero;
+                  _audioDuration = Duration.zero;
+                });
+              }
+              if (!mounted) return;
+              setState(() => _attachments.remove(path));
+              _scheduleAutoSave();
+            },
+            icon: const Icon(Icons.close_rounded, size: 20),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMetadataRow({
@@ -1187,8 +1659,7 @@ Future<void> _pickImageUrl() async {
                 _checklistMarker,
                 style: const TextStyle(fontSize: 22),
               ),
-              onPressed: () =>
-                  _insertBlock(type: "check", marker: _checklistMarker),
+              onPressed: _addChecklistBlock,
               tooltip: 'Tambah checklist ($_checklistMarker)',
             ),
             PopupMenuButton<String>(
@@ -1227,10 +1698,10 @@ Future<void> _pickImageUrl() async {
               tooltip: 'Lampirkan File',
             ),
             IconButton(
-              icon: Icon(_isRecording ? Icons.stop_circle : Icons.mic_none),
-              color: _isRecording ? Colors.red : null,
-              onPressed: _toggleRecording,
-              tooltip: _isRecording ? 'Stop Rekaman' : 'Rekam Suara',
+              icon: const Icon(Icons.mic_none),
+              color: widget.color,
+              onPressed: _isRecording ? null : _toggleRecording,
+              tooltip: 'Rekam Suara',
             ),
           ],
         ),
@@ -1242,7 +1713,13 @@ Future<void> _pickImageUrl() async {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _autoSaveTimer?.cancel();
-    titleController.removeListener(_scheduleAutoSave);
+    _recordingTimer?.cancel();
+    _positionSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _completeSubscription?.cancel();
+    _playerStateSubscription?.cancel();
+    unawaited(_previewPlayer.dispose());
+    titleController.removeListener(_recordEditorChange);
     titleController.dispose();
     for (final controller in _blockControllers) {
       controller.dispose();
